@@ -20,3 +20,13 @@ It is precisely this class imbalance (in terms of size) that motivates our resea
  - [ ] Try and see whether we can actually scrape the article bodies of the FakeNewsNet dataset
  - [ ] Look for papers that perform classification using 2 streams of data
  - [ ] Find a baseline model
+
+
+### Further notes
+It might be interesting to consider a model that is described in paper available as `mtl_benchmark.pdf`, where they propose shared layers for the encoder with private classifier layers stacked on top. In this paper, authors incorporated the model to work for **both sentences and pairs of sentences** (however, this does not answer the questions of how to encode a document in our case). The model architecture can be also checked as the image `possible-model.png`.
+
+On the other hand, there is almost no SOTA for the FakeNewsNet that works only with the textual data. I have added some papers with the SOTA results on this dataset (`fakenewsnet_sota.pdf`, `fakenewsnet_social.pdf`, `fakenewsnet_social2.pdf`) but they are not directly comparable/reproducable since they are actually not neural architectures.
+
+Nevertheless, this might only make our research question more legitimate. Furthermore, I was wondering if it is possible to have a 2-stream architecture where first is parsed with the **article text and headline** while the other is parsed with **associated tweets**. Might seem like an interesting research area as well.
+
+Finally, we could consider looking into the LIAR dataset, I have added some papers for reference but don't have any strong thoughts about it yet. 
