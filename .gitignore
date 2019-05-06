@@ -16,3 +16,6 @@ __pycache__/
 # spyder
 .spyderproject
 .spyproject
+
+# FakeNewsNet
+fakenewsnet_dataset/
