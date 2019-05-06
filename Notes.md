@@ -41,3 +41,6 @@ We're still not entirely sure on which Dataset to use: While we have been able t
 - [ ] Implement the sentence encoder based on the HAN architecture
 - [ ] Implement the document encoder based on the HAN architecture
 - [ ] Implement the SNLI classification based on the practical assignment / other
+
+### Questions
+- The HAN architecture uses GRU's for their RNN. Should we also use GRU's or should we use LSTM's? It seems like we could easily swap the one for the other.
