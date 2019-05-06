@@ -17,8 +17,8 @@ It is precisely this class imbalance (in terms of size) that motivates our resea
  - What would our training strategy be for MTL (NLI first and FND second or the other way around)?
   
 ### Action points
- - [ ] Try and see whether we can actually scrape the article bodies of the FakeNewsNet dataset
- - [ ] Look for papers that perform classification using 2 streams of data
+ - [x] Try and see whether we can actually scrape the article bodies of the FakeNewsNet dataset
+ - [x] Look for papers that perform classification using 2 streams of data
  - [ ] Find a baseline model
 
 
@@ -29,4 +29,4 @@ On the other hand, there is almost no SOTA for the FakeNewsNet that works only w
 
 Nevertheless, this might only make our research question more legitimate. Furthermore, I was wondering if it is possible to have a 2-stream architecture where first is parsed with the **article text and headline** while the other is parsed with **associated tweets**. Might seem like an interesting research area as well.
 
-Finally, we could consider looking into the LIAR dataset, I have added some papers for reference but don't have any strong thoughts about it yet. 
+Finally, we could consider looking into the LIAR dataset, I have added some papers for reference but don't have any strong thoughts about it yet.
