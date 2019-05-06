@@ -17,8 +17,8 @@ It is precisely this class imbalance (in terms of size) that motivates our resea
  - What would our training strategy be for MTL (NLI first and FND second or the other way around)?
   
 ### Action points
- - [ ] Try and see whether we can actually scrape the article bodies of the FakeNewsNet dataset
- - [ ] Look for papers that perform classification using 2 streams of data
+ - [x] Try and see whether we can actually scrape the article bodies of the FakeNewsNet dataset
+ - [x] Look for papers that perform classification using 2 streams of data
  - [ ] Find a baseline model
 
 
@@ -29,4 +29,18 @@ On the other hand, there is almost no SOTA for the FakeNewsNet that works only w
 
 Nevertheless, this might only make our research question more legitimate. Furthermore, I was wondering if it is possible to have a 2-stream architecture where first is parsed with the **article text and headline** while the other is parsed with **associated tweets**. Might seem like an interesting research area as well.
 
-Finally, we could consider looking into the LIAR dataset, I have added some papers for reference but don't have any strong thoughts about it yet. 
+Finally, we could consider looking into the LIAR dataset, I have added some papers for reference but don't have any strong thoughts about it yet.
+
+
+## Meeting 06-05-2019
+After further research and discussion, we have now settled on a "hybrid" model, which combines the Multi-Task Deep Neural Network (MT-DNN) set-up a proposed by [Liu et al. (2019)](https://arxiv.org/abs/1901.11504), and the Hierarchical Attention Networks (HAN) document encoder by [Yang et al. (2016)](https://www.cs.cmu.edu/~./hovy/papers/16HLT-hierarchical-attention-networks.pdf).
+
+We're still not entirely sure on which Dataset to use: While we have been able to succesfully scrape the FakeNewsNet articles using the code provided by the paper authors, SOTA research incorporates the rich social metadata, which is not something we intend to do. We're also exploring the factcheck dataset.
+
+### Action points
+- [ ] Implement the sentence encoder based on the HAN architecture
+- [ ] Implement the document encoder based on the HAN architecture
+- [ ] Implement the SNLI classification based on the practical assignment / other
+
+### Questions
+- The HAN architecture uses GRU's for their RNN. Should we also use GRU's or should we use LSTM's? It seems like we could easily swap the one for the other.
