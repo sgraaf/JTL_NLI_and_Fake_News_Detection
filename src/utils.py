@@ -55,7 +55,7 @@ def attention_mul(rnn_output, attention_weights):
         feature = feature_1 * feature_2
         features.append(feature.unsqueeze(0))
     output = torch.cat(features, 0)
-    
+
     return torch.sum(output, 0).unsqueeze(0)
 
 
@@ -86,7 +86,6 @@ def create_checkpoint(checkpoints_dir, epoch, model, optimizer, results, best_ac
     print('Done!')
 
 
-
 def load_checkpoint(checkpoint_path, model, optimizer):
     """
     Loads a checkpoint
@@ -97,7 +96,7 @@ def load_checkpoint(checkpoint_path, model, optimizer):
     :returns: tuple of epoch, model, optimizer, results and best_accuracy of the checkpoint
     :rtype: tuple(int, nn.Module, optim.Optimizer, dict, float)
     """
-    print('Loading checkpoint...', end=' ')
+    print('Loading the checkpoint...', end=' ')
     checkpoint = torch.load(checkpoint_path)
     epoch = checkpoint['epoch']
     model.load_state_dict(checkpoint['model_state_dict'])
@@ -120,12 +119,13 @@ def load_latest_checkpoint(checkpoints_dir, model, optimizer):
     :rtype: tuple(int, dict, float)
     """
     print('Loading the latest checkpoint (if any exist)...', end=' ')
-    checkpoints = list(checkpoints_dir.glob(f'{model.__class__.__name__}_{optimizer.__class__.__name__}_checkpoint_*.pt'))
+    checkpoints = list(checkpoints_dir.glob(
+        f'{model.__class__.__name__}_{optimizer.__class__.__name__}_checkpoint_*.pt'))
     if len(checkpoints) > 0:  # there exist checkpoints for this model and optimizer!
         # determine the latest checkpoint
         checkpoints.sort(key=getctime)
         latest_checkpoint_path = checkpoints[-1]
-        
+
         # load the latest checkpoint
         checkpoint = torch.load(latest_checkpoint_path)
         epoch = checkpoint['epoch']
@@ -137,6 +137,7 @@ def load_latest_checkpoint(checkpoints_dir, model, optimizer):
         # initialize the epoch, results and best_accuracy
         epoch = 0
         results = {
+            'epoch': [],
             'train_accuracy': [],
             'train_loss': [],
             'dev_accuracy': [],
@@ -148,3 +149,66 @@ def load_latest_checkpoint(checkpoints_dir, model, optimizer):
     print('Done!')
 
     return epoch, results, best_accuracy
+
+
+def save_model(models_dir, model):
+    """
+    Saves the model in the specified directory
+
+    :param pathlib.Path models_dir: the path of the directory to save the models in
+    :param nn.Module model: the model
+    """
+    print('Saving the model...', end=' ')
+    model_path = models_dir / f'{model.__class__.__name__}_model.pt'
+    torch.save(model.state_dict(), model_path)
+    print('Done!')
+
+
+def save_results(results_dir, results, model):
+    """
+    Saves the results in the specified directory
+
+    :param pathlib.Path results_dir: the path of the directory to save the results in
+    :param dict results: the results
+    :param nn.Module model: the model
+    """
+    print('Saving the results...', end=' ')
+    results_df = df.from_dict(results)
+    results_path = results_dir / f'{model.__class__.__name__}_results.csv'
+    results_df.to_csv(results_path, sep=';', encoding='utf-8', index=False)
+    print('Done!')
+
+
+def plot_results(results_dir, results, model):
+    """
+    Plots the results in the specified directory
+
+    :param pathlib.Path results_dir: the path of the directory to save the plots in
+    :param dict results: the results
+    :param nn.Module model: the model
+    """
+    df = df.from_dict(results)
+    x = df['Unnamed: 0'] + 1
+    
+    fig, ax1 = plt.subplots()
+    ax1.plot(df['epoch'], df['dev_accuracy'], color='tab:orange', marker='o', label='Dev accuracy')
+    ax1.plot(df['epoch'], df['train_accuracy'], color='tab:red', marker='o', label='Train accuracy')
+    ax1.set_xlabel('Epoch')
+    ax1.set_ylabel('Accuracy')
+    ax1.tick_params('y')
+    ax1.set_ylim([0, 1])
+
+    ax2 = ax1.twinx()
+    ax2.plot(df['epoch'], df['dev_loss'], color='tab:blue', marker='o', label='Dev loss')
+    ax2.plot(df['epoch'], df['train_loss'], color='tab:green', marker='o', label='Train loss')
+    ax2.set_ylabel('Loss')
+    ax2.tick_params('y')
+    # ax2.set_ylim([0, 5])
+
+    h1, l1 = ax1.get_legend_handles_labels()
+    h2, l2 = ax2.get_legend_handles_labels()
+    ax1.legend(h1+h2, l1+l2, loc=0)
+    plt.tight_layout()
+    plot_path = results_dir / f'{model.__class__.__name__}_accuracy_loss_curves.png'
+    plt.savefig(plot_path)
+    plt.show()
