@@ -1,15 +1,23 @@
 from torchtext import data
-from nltk import word_tokenize
+import nltk 
 from pathlib import Path
 from torchtext.data import TabularDataset
-nltk.download('punkt')
-
- 
 
 def preprocess_data(data_dir):
+    """
+    Preprocess data using Torchtext Fields.
+    
+    Args:
+        data_dir: directory with train/val/test splits of data
+    
+    Returns:
+        all_data: TabularDataset with the data splits
+        x_field: Field for input text
+        y_field: Field for output label
+    """
     x_field = data.Field(sequential=True,
                          lower=True,
-                         tokenize=word_tokenize,
+                         tokenize=nltk.word_tokenize,
                          include_lengths=True)
     y_field = data.Field(sequential=False,
                          pad_token=None,
@@ -29,6 +37,7 @@ def preprocess_data(data_dir):
     
     return all_data, x_field, y_field
 
+nltk.download('punkt') #For tokenizing words in the data
 DATA_DIR = Path.cwd().parent / 'fakenewsnet_dataset'
 all_data, texts, labels = preprocess_data(DATA_DIR)
 

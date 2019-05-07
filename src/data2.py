@@ -1,3 +1,11 @@
+"""
+IMPORTANT:
+    
+This script should be run once before all experiments, 
+it just dumps the collection of JSON files into train/val/test splits
+
+"""
+
 import csv
 import json
 from pathlib import Path
