@@ -1,47 +1,95 @@
-from torchtext import data
-import nltk 
+from collections import Counter
 from pathlib import Path
-from torchtext.data import TabularDataset
 
-def preprocess_data(data_dir):
+import numpy as np
+import torch
+from nltk.tokenize import word_tokenize
+
+from torchtext.data import Field, TabularDataset
+from torchtext.datasets import SNLI
+from torchtext.vocab import GloVe
+
+
+def get_SNLI(text_field, label_field, percentage=None):
     """
-    Preprocess data using Torchtext Fields.
-    
-    Args:
-        data_dir: directory with train/val/test splits of data
-    
-    Returns:
-        all_data: TabularDataset with the data splits
-        x_field: Field for input text
-        y_field: Field for output label
+    Returns the SNLI dataset in splits
+
+    :param torchtext.data.Field text_field: the field that will be used for premise and hypothesis data
+    :param torchtext.data.Field label_field: the field that will be used for label data
+    :param float percentage: the percentage of the data to use
+    :returns: the SNLI dataset in splits
+    :rtype: tuple
     """
-    x_field = data.Field(sequential=True,
-                         lower=True,
-                         tokenize=nltk.word_tokenize,
-                         include_lengths=True)
-    y_field = data.Field(sequential=False,
-                         pad_token=None,
-                         unk_token=None,
-                         is_target=True)
-    datafields = [("title", x_field), 
-                  ("text", x_field), 
-                  ("label", y_field)]
-    all_data = {}
-    all_data["train"], all_data["val"], all_data["test"] = TabularDataset.splits(
-                   path=data_dir, # the root directory where the data lies
-                   train='train.csv', validation='val.csv', test='test.csv',
-                   format='csv',
-                   skip_header=True, # if your csv header has a header, make sure to pass this to ensure it doesn't get proceesed as data!
-                   fields=datafields,
-                   csv_reader_params={'delimiter': ';'})    
-    
-    return all_data, x_field, y_field
+    train, dev, test = SNLI.splits(text_field, label_field)
 
-nltk.download('punkt') #For tokenizing words in the data
-DATA_DIR = Path.cwd().parent / 'fakenewsnet_dataset'
-all_data, texts, labels = preprocess_data(DATA_DIR)
+    if percentage:
+        train.examples = train.examples[:np.int(np.ceil(len(train) * percentage))]
+        dev.examples = dev.examples[:np.int(np.ceil(len(dev) * percentage))]
+        test.examples = test.examples[:np.int(np.ceil(len(test) * percentage))]
 
-# TODO: vectorize vocab through pre-trained embeddings
-#texts.build_vocab(all_data["val"], vectors=word_embeddings)
-#labels.build_vocab(all_data["val"])
-    
+    return train, dev, test
+
+
+def load_data(data_dir, percentage=None):
+    """
+    Load all relevant data (GloVe vectors, SNLI & FakeNewsNet datasets) for our experiments
+
+    :param float percentage: the percentage of the data to use
+    :returns: the data (train, dev, test, text_field and label_field)
+    :rtype: tuple(Dataset, Dataset, Dataset, Field, Field)
+    """
+    # get the GloVe vectors
+    print('Loading the GloVe vectors...', end=' ')
+    GloVe_vectors = GloVe()
+    print('Done!')
+
+    # set the dataset fields
+    TEXT = Field(
+        sequential=True,
+        use_vocab=True,
+        lower=True,
+        tokenize=word_tokenize,
+        include_lengths=True
+    )
+
+    LABEL = Field(
+        sequential=False,
+        use_vocab=True,
+        pad_token=None,
+        unk_token=None,
+        is_target=True
+    )
+
+    # get the SNLI dataset in splits
+    print('Loading the SNLI dataset...', end=' ')
+    SNLI = {}
+    SNLI['train'], SNLI['dev'], SNLI['test'] = get_SNLI(TEXT, LABEL, percentage)
+    print('Done')
+
+    # get the FakeNewsNet dataset in splits
+    print('Loading the FakeNewsNet dataset...', end=' ')
+    FNN_Fields = [
+        ('title', TEXT),
+        ('text', TEXT),
+        ('label', LABEL)
+    ]
+    FNN = {}
+    FNN['train'], FNN['val'], FNN['test'] = TabularDataset.splits(
+        path=data_dir,
+        format='csv',
+        fields=FNN_Fields,
+        skip_header=True,
+        train='train.csv', validation='val.csv', test='test.csv',
+        csv_reader_params={'delimiter': ';'}
+    )
+    print('Done!')
+
+    # build the text_field vocabulary from all data splits
+    print('Building the vocabularies...', end=' ')
+    TEXT.build_vocab(SNLI['train'], SNLI['dev'], SNLI['test'], FNN['train'], FNN['val'], FNN['test'], vectors=GloVe_vectors)
+
+    # build the label_field vocabulary from the train split
+    LABEL.build_vocab(SNLI['train'], FNN['train'])
+    print('Done!')
+
+    return SNLI, FNN, TEXT, LABEL
