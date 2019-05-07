@@ -40,7 +40,7 @@ class WordAttentionRNN(nn.Module):
 
         # compute the attention
         word_squish = matrix_matmul(word_output, self.word_weight, self.word_bias)
-        word_attention = matrix_matmul(word_squish, self.context_weight).permute(1, 0)
+        word_attention = matrix_matmul(word_squish, self.context_weight).transpose(1, 0)
         word_attention_norm = self.softmax(word_attention)
         word_attn_vecs = attention_mul(word_output, word_attention_norm.transpose(1, 0))
 
