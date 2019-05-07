@@ -1,8 +1,17 @@
 import csv
 import json
 from pathlib import Path
-
+from sklearn.model_selection import train_test_split
 from pandas import DataFrame as df
+
+
+def create_splits(df, ratio):
+    train, test = train_test_split(df, test_size=ratio, random_state=1)
+    ratio = len(test) / len(train)
+    train, val = train_test_split(train, test_size=ratio, random_state=1)
+    
+    return train, test, val
+
 
 DATA_DIR = Path.cwd().parent / 'fakenewsnet_dataset'
 JSON_FILES = sorted(DATA_DIR.rglob('*.json'))
@@ -32,3 +41,8 @@ for json_file in JSON_FILES:
 df = df.from_dict(news_content)
 df_path = DATA_DIR / 'news_content.csv'
 df.to_csv(df_path, sep=';', encoding='utf-8', quoting=csv.QUOTE_NONNUMERIC, index=False)
+
+train, test, val = create_splits(df, ratio=0.1)
+train.to_csv(DATA_DIR / 'train.csv', sep=';', encoding='utf-8', quoting=csv.QUOTE_NONNUMERIC, index=False)
+test.to_csv(DATA_DIR / 'test.csv', sep=';', encoding='utf-8', quoting=csv.QUOTE_NONNUMERIC, index=False)
+val.to_csv(DATA_DIR / 'val.csv', sep=';', encoding='utf-8', quoting=csv.QUOTE_NONNUMERIC, index=False)
