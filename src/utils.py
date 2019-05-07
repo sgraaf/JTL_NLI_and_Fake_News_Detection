@@ -36,6 +36,22 @@ def print_model_parameters(model):
         print(f' {name:<{longest_param_name_length}}: {param}')
 
 
+def print_dataset_sizes(dataset, data_percentage, name):
+    """
+    Prints the sizes of the dataset splits.
+
+    :param dict dataset: the dataset
+    :param float data_percentage: the percentage of the data used
+    :param str name: the name of the dataset
+    """
+    print(f'{name} dataset size (using {data_percentage * 100:.0f}% of the data):')
+    longest_set_size = len(str(max(len(dataset['train']), len(dataset['dev']), len(dataset['test']))))
+    print(f'Train: {len(dataset["train"]): longest_set_size} samples')
+    print(f'Dev:   {len(dataset["dev"]): longest_set_size} samples')
+    print(f'Test:  {len(dataset["test"]): longest_set_size} samples')
+    print()
+
+
 def matrix_matmul(seq, weight, bias=None):
     features = []
     for feature in seq:
@@ -187,20 +203,19 @@ def plot_results(results_dir, results, model):
     :param dict results: the results
     :param nn.Module model: the model
     """
-    df = df.from_dict(results)
-    x = df['Unnamed: 0'] + 1
-    
+    results_df = df.from_dict(results)
+
     fig, ax1 = plt.subplots()
-    ax1.plot(df['epoch'], df['dev_accuracy'], color='tab:orange', marker='o', label='Dev accuracy')
-    ax1.plot(df['epoch'], df['train_accuracy'], color='tab:red', marker='o', label='Train accuracy')
+    ax1.plot(results_df['epoch'], results_df['dev_accuracy'], color='tab:orange', marker='o', label='Dev accuracy')
+    ax1.plot(results_df['epoch'], results_df['train_accuracy'], color='tab:red', marker='o', label='Train accuracy')
     ax1.set_xlabel('Epoch')
     ax1.set_ylabel('Accuracy')
     ax1.tick_params('y')
     ax1.set_ylim([0, 1])
 
     ax2 = ax1.twinx()
-    ax2.plot(df['epoch'], df['dev_loss'], color='tab:blue', marker='o', label='Dev loss')
-    ax2.plot(df['epoch'], df['train_loss'], color='tab:green', marker='o', label='Train loss')
+    ax2.plot(results_df['epoch'], results_df['dev_loss'], color='tab:blue', marker='o', label='Dev loss')
+    ax2.plot(results_df['epoch'], results_df['train_loss'], color='tab:green', marker='o', label='Train loss')
     ax2.set_ylabel('Loss')
     ax2.tick_params('y')
     # ax2.set_ylim([0, 5])
@@ -212,3 +227,8 @@ def plot_results(results_dir, results, model):
     plot_path = results_dir / f'{model.__class__.__name__}_accuracy_loss_curves.png'
     plt.savefig(plot_path)
     plt.show()
+
+
+def create_directories(*args):
+    for dir in args:
+        dir.mkdir(parents=True, exist_ok=True)
