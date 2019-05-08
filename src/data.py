@@ -82,6 +82,10 @@ def load_data(data_dir, percentage=None):
         train='train.csv', validation='val.csv', test='test.csv',
         csv_reader_params={'delimiter': ';'}
     )
+    if percentage:
+        FNN['train'] = FNN['train'][:np.int(np.ceil(len(FNN['train']) * percentage))]
+        FNN['val'] = FNN['val'][:np.int(np.ceil(len(FNN['val']) * percentage))]
+        FNN['test'] = FNN['test'][:np.int(np.ceil(len(FNN['test']) * percentage))] 
     print('Done!')
 
     # build the text_field vocabulary from all data splits

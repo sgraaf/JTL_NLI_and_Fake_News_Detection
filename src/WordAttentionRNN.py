@@ -4,15 +4,6 @@ import torch.nn.functional as F
 
 from utils import attention_mul, matrix_matmul
 
-# just for sanity checks, baseline encoder from practical 1
-class BaselineEncoder(nn.Module):
-    def __init__(self):
-        super(BaselineEncoder, self).__init__()
-
-    def forward(self, sent, sent_l):
-        output = torch.div(torch.sum(sent, dim=0), sent_l.view(-1, 1).to(torch.float))
-
-        return output
 
 class WordAttentionRNN(nn.Module):
 
