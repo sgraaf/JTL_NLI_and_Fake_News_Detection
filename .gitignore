@@ -19,3 +19,7 @@ __pycache__/
 
 # FakeNewsNet
 fakenewsnet_dataset/
+
+# GloVe and SNLI
+src/.data/
+src/.vector_cache/
