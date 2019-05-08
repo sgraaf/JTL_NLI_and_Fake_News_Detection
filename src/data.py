@@ -34,9 +34,10 @@ def load_data(data_dir, percentage=None):
     """
     Load all relevant data (GloVe vectors, SNLI & FakeNewsNet datasets) for our experiments
 
+    :param Path data_dir: the directory in which the data is stored
     :param float percentage: the percentage of the data to use
-    :returns: the data (train, dev, test, text_field and label_field)
-    :rtype: tuple(Dataset, Dataset, Dataset, Field, Field)
+    :returns: the data (SNLI dateset, FNN dataset, TEXT field and LABEL field)
+    :rtype: tuple(Dataset, Dataset, Field, Field)
     """
     # get the GloVe vectors
     print('Loading the GloVe vectors...', end=' ')
