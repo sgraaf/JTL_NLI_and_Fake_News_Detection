@@ -31,9 +31,9 @@ class WordAttentionRNN(nn.Module):
         # initialize the Softmax activation function
         self.softmax = nn.Softmax()
 
-    def forward(self, input, word_hidden=None):
+    def forward(self, word, word_hidden=None):
         # embed the input
-        input_emb = self.embedding(input)
+        input_emb = self.embedding(word)
 
         # run the embedded input through the GRU cell
         word_output, word_hidden = self.GRU_cell(input_emb, word_hidden)
