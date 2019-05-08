@@ -1,4 +1,4 @@
-from os import getctime
+from os.path import getctime
 from pathlib import Path
 
 import matplotlib.pyplot as plt
