@@ -54,19 +54,20 @@ def print_dataset_sizes(dataset, data_percentage, name):
 
 def matrix_matmul(seq, weight, bias=None):
     features = []
+    i = 1
     for feature in seq:
+        i += 1
         feature = torch.mm(feature, weight)
-        if bias:
+        if bias is not None:
             feature = feature + bias.expand(feature.size()[0], bias.size()[1])
         feature = torch.tanh(feature).unsqueeze(0)
         features.append(feature)
-
-    return torch.cat(feature_list, 0).squeeze()
+    return torch.cat(features, 0).squeeze()
 
 
 def attention_mul(rnn_output, attention_weights):
     features = []
-    for feature_1, feature_2 in zip(input1, input2):
+    for feature_1, feature_2 in zip(rnn_output, attention_weights):
         feature_2 = feature_2.unsqueeze(1).expand_as(feature_1)
         feature = feature_1 * feature_2
         features.append(feature.unsqueeze(0))

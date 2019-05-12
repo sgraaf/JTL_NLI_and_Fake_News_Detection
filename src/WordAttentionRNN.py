@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+
 
 from utils import attention_mul, matrix_matmul
 
@@ -34,15 +34,15 @@ class WordAttentionRNN(nn.Module):
     def forward(self, word, word_hidden=None):
         # embed the input
         input_emb = self.embedding(word)
-
         # run the embedded input through the GRU cell
+        if input_emb.size() != 3:
+            input_emb = input_emb.unsqueeze(1)
         word_output, word_hidden = self.GRU_cell(input_emb, word_hidden)
-
         # compute the attention
         word_squish = matrix_matmul(word_output, self.word_weight, self.word_bias)
-        word_attention = matrix_matmul(word_squish, self.context_weight).transpose(1, 0)
+        word_attention = matrix_matmul(word_squish.unsqueeze(1), self.context_weight)
         word_attention_norm = self.softmax(word_attention)
-        word_attn_vecs = attention_mul(word_output, word_attention_norm.transpose(1, 0))
+        word_attn_vecs = attention_mul(word_output, word_attention_norm.unsqueeze(0).transpose(1, 0))
 
         return word_attn_vecs, word_hidden, word_attention_norm
 

@@ -30,7 +30,7 @@ def get_SNLI(text_field, label_field, percentage=None):
     return train, dev, test
 
 
-def load_data(data_dir, percentage=None):
+def load_data(data_dir, percentage=None, only_fn=False):
     """
     Load all relevant data (GloVe vectors, SNLI & FakeNewsNet datasets) for our experiments
 
@@ -48,6 +48,7 @@ def load_data(data_dir, percentage=None):
     TEXT = Field(
         sequential=True,
         use_vocab=True,
+        eos_token='<eos>',
         lower=True,
         tokenize=word_tokenize,
         include_lengths=True
@@ -62,10 +63,11 @@ def load_data(data_dir, percentage=None):
     )
 
     # get the SNLI dataset in splits
-    print('Loading the SNLI dataset...', end=' ')
-    SNLI = {}
-    SNLI['train'], SNLI['dev'], SNLI['test'] = get_SNLI(TEXT, LABEL, percentage)
-    print('Done')
+    if not only_fn:
+        print('Loading the SNLI dataset...', end=' ')
+        SNLI = {}
+        SNLI['train'], SNLI['dev'], SNLI['test'] = get_SNLI(TEXT, LABEL, percentage)
+        print('Done')
 
     # get the FakeNewsNet dataset in splits
     print('Loading the FakeNewsNet dataset...', end=' ')
@@ -90,11 +92,19 @@ def load_data(data_dir, percentage=None):
     print('Done!')
 
     # build the text_field vocabulary from all data splits
-    print('Building the vocabularies...', end=' ')
-    TEXT.build_vocab(SNLI['train'], SNLI['dev'], SNLI['test'], FNN['train'], FNN['val'], FNN['test'], vectors=GloVe_vectors)
-
     # build the label_field vocabulary from the train split
-    LABEL.build_vocab(SNLI['train'], FNN['train'])
-    print('Done!')
+    print('Building the vocabularies...', end=' ')
+    
+    if only_fn:
+        TEXT.build_vocab(FNN['train'], FNN['val'], FNN['test'], vectors=GloVe_vectors)
+        LABEL.build_vocab(FNN['train'])
+        print('Done!')
+        return FNN, TEXT, LABEL
 
-    return SNLI, FNN, TEXT, LABEL
+    else:
+        TEXT.build_vocab(SNLI['train'], SNLI['dev'], SNLI['test'], FNN['train'], FNN['val'], FNN['test'], vectors=GloVe_vectors)
+        LABEL.build_vocab(SNLI['train'], FNN['train'])
+        print('Done!')
+        return SNLI, FNN, TEXT, LABEL
+
+        

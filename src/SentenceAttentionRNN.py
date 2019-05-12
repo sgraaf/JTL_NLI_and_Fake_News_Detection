@@ -37,15 +37,15 @@ class SentenceAttentionRNN(nn.Module):
         # initialize the Softmax activation function
         self.softmax = nn.Softmax()
 
-    def forward(self, input, sentence_hidden=None):
+    def forward(self, sentence, sentence_hidden=None):
         # run the input through the GRU cell
-        sentence_output, sentence_hidden = self.GRU_cell(input, sentence_hidden)
+        sentence_output, sentence_hidden = self.GRU_cell(sentence, sentence_hidden)
 
         # compute the attention
         sentence_squish = matrix_matmul(sentence_output, self.sentence_weight, self.sentence_bias)
-        sentence_attention = matrix_matmul(sentence_squish, self.context_weight).transpose(1, 0)
+        sentence_attention = matrix_matmul(sentence_squish.unsqueeze(1), self.context_weight)
         sentence_attention_norm = self.softmax(sentence_attention)
-        sentence_attn_vecs = attention_mul(sentence_output, sentence_attention_norm.transpose(1, 0))
+        sentence_attn_vecs = attention_mul(sentence_output, sentence_attention_norm.unsqueeze(0).transpose(1, 0))
 
         # compute the final output
         output = self.linear(sentence_attn_vecs.squeeze(0))
