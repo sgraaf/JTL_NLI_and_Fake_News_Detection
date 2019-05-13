@@ -48,7 +48,7 @@ def load_data(data_dir, percentage=None, only_fn=False):
     TEXT = Field(
         sequential=True,
         use_vocab=True,
-        eos_token='<eos>',
+        #eos_token='<eos>',
         lower=True,
         tokenize=word_tokenize,
         include_lengths=True
@@ -100,7 +100,6 @@ def load_data(data_dir, percentage=None, only_fn=False):
         LABEL.build_vocab(FNN['train'])
         print('Done!')
         return FNN, TEXT, LABEL
-
     else:
         TEXT.build_vocab(SNLI['train'], SNLI['dev'], SNLI['test'], FNN['train'], FNN['val'], FNN['test'], vectors=GloVe_vectors)
         LABEL.build_vocab(SNLI['train'], FNN['train'])

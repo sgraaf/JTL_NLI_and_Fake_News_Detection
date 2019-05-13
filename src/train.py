@@ -11,6 +11,7 @@ import torch.optim as optim
 from torchtext.data import BucketIterator
 
 from data import load_data
+from models import HierarchicalAttentionNet
 from SentenceAttentionRNN import SentenceAttentionRNN
 from utils import (create_directories, load_latest_checkpoint, plot_results,
                    print_dataset_sizes, print_flags, print_model_parameters,
@@ -23,14 +24,36 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 ROOT_DIR = Path.cwd().parent
 LEARNING_RATE = 0.05
 MAX_EPOCHS = 20
-BATCH_SIZE = 64
+BATCH_SIZE = 1
+NUM_CLASSES_FN = 2
 
-TRAIN_MODE_DEFAULT = 'MTL'
+WORD_EMBED_DIM = 300
+WORD_HIDDEN_DIM = 100
+SENT_HIDDEN_DIM = 100
+
+
+MODEL_TYPE_DEFAULT = 'STL'
 DATA_DIR_DEFAULT = ROOT_DIR / 'data'
 CHECKPOINTS_DIR_DEFAULT = ROOT_DIR / 'output' / 'checkpoints'
 MODELS_DIR_DEFAULT = ROOT_DIR / 'output' / 'models'
 RESULTS_DIR_DEFAULT = ROOT_DIR / 'output' / 'results'
 DATA_PERCENTAGE_DEFAULT = 1.00
+
+
+def doc_to_sents(document, text):
+    document, sent_tok = [], []
+    for word in document.text[0]:
+        sent_tok.append(word)
+        if word == text.vocab.itos.index('.'):
+            document.append(torch.tensor(sent_tok))
+            sent_tok = []
+        elif word == text.vocab.itos.index('!'):
+            document.append(torch.tensor(sent_tok))
+            sent_tok = []
+        elif word == text.vocab.itos.index('?'):
+            document.append(torch.tensor(sent_tok))
+            sent_tok = []   
+    return document
 
 
 def train():
@@ -40,6 +63,10 @@ def train():
     models_dir = Path(FLAGS.models_dir)
     results_dir = Path(FLAGS.results_dir)
     data_percentage = FLAGS.data_percentage
+    if model_type == 'STL':
+        only_fn = True
+    else:
+        only_fn = False
 
     # check if data directory exists
     if not data_dir.exists():
@@ -50,13 +77,16 @@ def train():
 
     # load the data
     print('Loading the data...')
-    SNLI, FNN, TEXT, LABEL = load_data(data_dir, data_percentage)
+    if only_fn:
+        FNN, TEXT, LABEL = load_data(data_dir, percentage=None, only_fn=only_fn)
+    else:
+        SNLI, FNN, TEXT, LABEL = load_data(data_dir, data_percentage, only_fn=only_fn)
     embedding = nn.Embedding.from_pretrained(TEXT.vocab.vectors)
     embedding.requires_grad = False
-    print()
 
     # print the dataset sizes
-    print_dataset_sizes(SNLI, data_percentage, 'SNLI')
+    if not only_fn:
+        print_dataset_sizes(SNLI, data_percentage, 'SNLI')
     print_dataset_sizes(FNN, data_percentage, 'FakeNewsNet')
 
     # initialize the model, according to the model type
@@ -64,10 +94,20 @@ def train():
     # TODO: Initialize the model properly
     if model_type == 'MTL':
         # model = ... 
+        print("Nothing for now.")
     elif model_type == 'STL':
         # model = ...
+        print("Loading an STL HAN model.")
+        model = HierarchicalAttentionNet(word_input_dim=WORD_EMBED_DIM, 
+                                 word_hidden_dim=WORD_HIDDEN_DIM, 
+                                 sent_hidden_dim=SENT_HIDDEN_DIM, 
+                                 batch_size=BATCH_SIZE, 
+                                 num_classes=NUM_CLASSES_FN, 
+                                 embedding=embedding)
     elif model_type == 'Transfer':
         # model = ...
+        print("Nothing for now.")
+
     model.to(DEVICE)
     print('Done!')
     print_model_parameters(model)
@@ -75,7 +115,7 @@ def train():
 
     # set the criterion and optimizer
     # TODO: Do we need a custom loss function for our model(s)?
-    criterion = nn.CrossEntropyLoss()
+    loss_func = nn.CrossEntropyLoss()
     optimizer = optim.Adam(
         params=model.parameters(),
         lr=LEARNING_RATE
@@ -83,7 +123,7 @@ def train():
 
     # load the last checkpoint (if it exists)
     epoch, results, best_accuracy = load_latest_checkpoint(checkpoints_dir, model, optimizer)
-
+    results = {'train_loss':[], 'train_acc':[], 'val_loss': [], 'val_accuracy': []}
     if epoch == 0:
         print(f'Starting training at epoch {epoch + 1}...')
     else:
@@ -93,7 +133,43 @@ def train():
         print(f'Epoch {i+1:0{len(str(MAX_EPOCHS))}}/{MAX_EPOCHS}:')
 
         # TODO: train the model (and evaluate it throughout)
-    
+        train_i, val_i, test_i = BucketIterator.splits(
+                datasets=(FNN['train'], FNN['val'], FNN['test']),
+                batch_sizes=(BATCH_SIZE,BATCH_SIZE,BATCH_SIZE),
+                shuffle=True)
+        model.train()
+        train_loss = 0.0
+        train_acc = []
+        val_loss = 0.0
+        val_acc = []
+        batchn = 0
+        for one_doc in train_i:
+            if batchn % 1000 == 0:
+                print(f'Processed {batchn} batches')
+            optimizer.zero_grad()
+            model._init_hidden_state()
+            document = doc_to_sents(one_doc, TEXT)
+            preds = model(document)
+            loss = loss_func(preds, one_doc.label)
+            loss.backward()
+            optimizer.step()
+            train_loss += loss.item() * BATCH_SIZE
+            acc = (one_doc.label == preds.argmax(dim=1)).float()
+            train_acc.append(acc)
+        model.eval() # turn on evaluation mode
+        val_loss = 0.0
+        for one_doc in val_i:
+            document = doc_to_sents(one_doc, TEXT)
+            preds = model(document)
+            loss = loss_func(preds, one_doc.label)
+            val_loss += loss.item() * BATCH_SIZE
+            acc = (one_doc.label == preds.argmax(dim=1)).float()
+            val_acc.append(acc)
+        results['train_loss'].append(train_loss / len(FNN["train"]))        
+        results['train_accuracy'].append(torch.tensor(train_acc).mean().item())
+        results['val_loss'].append(val_loss / len(FNN["val"]))
+        results['val_accuracy'].append(torch.tensor(val_acc).mean().item())
+        
     # save and plot the results
     save_results(results_dir, results, model)
     plot_results(results_dir, results, model)
@@ -120,7 +196,7 @@ def main():
 if __name__ == '__main__':
     # cli arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument('--train_mode', type=str, default=TRAIN_MODE_DEFAULT,
+    parser.add_argument('--model_type', type=str, default=MODEL_TYPE_DEFAULT,
                         help='Train mode (i.e: STL, MTL or Transfer)')
     parser.add_argument('--data_dir', type=str, default=DATA_DIR_DEFAULT,
                         help='Path of directory where the data is stored')
