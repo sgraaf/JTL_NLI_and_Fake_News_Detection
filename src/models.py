@@ -30,9 +30,13 @@ class HierarchicalAttentionNet(nn.Module):
         #self.max_word_len = max_word_len
         self.num_classes = num_classes
         self.embedding = embedding
-        self.word_att = WordAttentionRNN(self.word_input_dim, self.word_hidden_dim, self.embedding)
+        if torch.cuda.is_available():
+            self.to('cuda')
+            self.embedding = self.embedding.to('cuda')
+        self.word_att = WordAttentionRNN(self.word_input_dim, self.word_hidden_dim)
         self.sent_att = SentenceAttentionRNN(self.sent_input_dim, self.sent_hidden_dim, self.num_classes)
         self._init_hidden_state()
+
 
     def _init_hidden_state(self):
         self.word_hidden_state = torch.zeros(2, self.batch_size, self.word_hidden_dim)
@@ -48,6 +52,7 @@ class HierarchicalAttentionNet(nn.Module):
         #sentence = sentence.permute(1, 0, 2)
         for sentence in document:
             #packed_sents = nn.utils.rnn.pack_padded_sequence(sentence, lens,batch_first=True)
+            sentence = self.embedding(sentence)
             output, self.word_hidden_state, _ = self.word_att(sentence, self.word_hidden_state)
             output_list.append(output)
         output = torch.cat(output_list, 0)

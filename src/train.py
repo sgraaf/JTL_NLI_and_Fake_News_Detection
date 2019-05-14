@@ -18,6 +18,7 @@ from utils import (create_directories, load_latest_checkpoint, plot_results,
                    save_results, save_model)
 from WordAttentionRNN import WordAttentionRNN
 
+
 # defaults
 FLAGS = None
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -91,6 +92,7 @@ def train():
         SNLI, FNN, TEXT, LABEL = load_data(data_dir, data_percentage, only_fn=only_fn)
     embedding = nn.Embedding.from_pretrained(TEXT.vocab.vectors)
     embedding.requires_grad = False
+    embedding = embedding.to(DEVICE)
 
     # print the dataset sizes
     if not only_fn:
@@ -117,6 +119,7 @@ def train():
         print("Nothing for now.")
 
     model.to(DEVICE)
+    print(DEVICE)
     print('Done!')
     print_model_parameters(model)
     print()
@@ -128,7 +131,9 @@ def train():
         params=model.parameters(),
         lr=LEARNING_RATE
     )
-
+    
+    loss_func.to('cuda')
+    
     # load the last checkpoint (if it exists)
     epoch, results, best_accuracy = load_latest_checkpoint(checkpoints_dir, model, optimizer)
     results = {'epoch':[], 'train_loss':[], 'train_accuracy':[], 'val_loss': [], 'val_accuracy': []}
@@ -140,12 +145,21 @@ def train():
     for i in range(epoch, MAX_EPOCHS):
         print(f'Epoch {i+1:0{len(str(MAX_EPOCHS))}}/{MAX_EPOCHS}:')
 
-        train_i, val_i, test_i = BucketIterator.splits(
-                datasets=(FNN['train'], FNN['val'], FNN['test']),
-                batch_sizes=(BATCH_SIZE,BATCH_SIZE,BATCH_SIZE),
-                sort_key=lambda x: len(x.text[0]), # the BucketIterator needs to be told what function it should use to group the data.
-                #sort_within_batch=False,
-                shuffle=True)
+        if torch.cuda.is_available():
+            train_i, val_i, test_i = BucketIterator.splits(
+                    datasets=(FNN['train'], FNN['val'], FNN['test']),
+                    batch_sizes=(BATCH_SIZE,BATCH_SIZE,BATCH_SIZE),
+                    device=torch.cuda.current_device(),
+                    sort_key=lambda x: len(x.text[0]), # the BucketIterator needs to be told what function it should use to group the data.
+                    #sort_within_batch=False,
+                    shuffle=True)
+        else:
+            train_i, val_i, test_i = BucketIterator.splits(
+                    datasets=(FNN['train'], FNN['val'], FNN['test']),
+                    batch_sizes=(BATCH_SIZE,BATCH_SIZE,BATCH_SIZE),
+                    sort_key=lambda x: len(x.text[0]), # the BucketIterator needs to be told what function it should use to group the data.
+                    #sort_within_batch=False,
+                    shuffle=True)
         model.train()
         train_loss = 0.0
         train_acc = []
@@ -155,19 +169,19 @@ def train():
         fails = 0
         failed = []
         for one_doc in train_i:
-            if batchn % 1000 == 0:
+            if batchn % 10 == 0:
                 print(f'Processed {batchn} batches')
             batchn += 1
             optimizer.zero_grad()
             model._init_hidden_state()
             document = doc_to_sents(one_doc, TEXT)
-            try:
-                preds = model(document)
-            except:
-                print("couldn't process!")
-                failed.append(one_doc)
-                fails += 1
-                continue
+            #try:
+            preds = model(document)
+            #except:
+            #    print("couldn't process!")
+            #    failed.append(one_doc)
+            #    fails += 1
+            #    continue
             loss = loss_func(preds, one_doc.label)
             loss.backward()
             optimizer.step()

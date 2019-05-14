@@ -25,6 +25,9 @@ class SentenceAttentionRNN(nn.Module):
             in_features=2*self.hidden_dim,
             out_features=self.num_classes
         )
+        if torch.cuda.is_available():
+            self.to('cuda')
+
 
         # initialize the attention parameters
         mu = 0.0

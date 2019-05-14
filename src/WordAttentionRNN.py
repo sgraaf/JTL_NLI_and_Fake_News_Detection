@@ -7,11 +7,14 @@ from utils import attention_mul, matrix_matmul
 
 class WordAttentionRNN(nn.Module):
 
-    def __init__(self, input_dim, hidden_dim, embedding):
+    def __init__(self, input_dim, hidden_dim):
         super(WordAttentionRNN, self).__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
-        self.embedding = embedding
+        #self.embedding = embedding
+        if torch.cuda.is_available():
+            self.to('cuda')
+            #self.embedding = self.embedding.to('cuda')
 
         # initialize the GRU cell
         self.GRU_cell = nn.GRU(
@@ -27,13 +30,14 @@ class WordAttentionRNN(nn.Module):
         self.word_weight = nn.Parameter(mu + sigma * torch.randn((2 * self.hidden_dim, 2 * self.hidden_dim)))
         self.word_bias = nn.Parameter(torch.zeros((1, 2 * self.hidden_dim)))
         self.context_weight = nn.Parameter(mu + sigma * torch.randn((2 * self.hidden_dim, 1)))
-
+        
         # initialize the Softmax activation function
         self.softmax = nn.Softmax()
 
     def forward(self, word, word_hidden=None):
         # embed the input
-        input_emb = self.embedding(word)
+        #input_emb = self.embedding(word)
+        input_emb = word
         # run the embedded input through the GRU cell
         if input_emb.size() != 3:
             input_emb = input_emb.unsqueeze(1)

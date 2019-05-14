@@ -52,6 +52,7 @@ def load_data(data_dir, percentage=None, only_fn=False):
         lower=True,
         tokenize=word_tokenize,
         include_lengths=True
+        #dtype=torch.cuda.FloatTensor
     )
 
     LABEL = Field(
@@ -60,6 +61,7 @@ def load_data(data_dir, percentage=None, only_fn=False):
         pad_token=None,
         unk_token=None,
         is_target=True
+        #dtype=torch.cuda.float
     )
 
     # get the SNLI dataset in splits
