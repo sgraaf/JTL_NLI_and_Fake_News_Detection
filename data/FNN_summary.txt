@@ -1,0 +1,62 @@
+Filename: FNN_cleaned.csv
+Total number of documents: 21439
+Total number of sentences: 670806
+Total number of words: 16426180
+
+
+Summary statistics for the articles titles:
+--------------------------------------------------------------------------------
+Min.   sentence count: 1
+Median sentence count: 1.0
+Mean   sentence count: 1.062922710947339
+Max.   sentence count: 11
+
+Min.   word count: 1
+Median word count: 12.0
+Mean   word count: 12.69392229115164
+Max.   word count: 47
+
+
+Summary statistics for the articles bodies:
+--------------------------------------------------------------------------------
+Min.   sentence count: 1
+Median sentence count: 17.0
+Mean   sentence count: 30.226129950090957
+Max.   sentence count: 1880
+
+Min.   word count: 3
+Median word count: 421.0
+Mean   word count: 753.4882690423993
+Max.   word count: 21458
+
+
+Filename: FNN_clipped.csv
+Total number of documents: 20428
+Total number of sentences: 433114
+Total number of words: 10821436
+
+
+Summary statistics for the articles titles:
+--------------------------------------------------------------------------------
+Min.   sentence count: 1
+Median sentence count: 1.0
+Mean   sentence count: 1.064274525161543
+Max.   sentence count: 11
+
+Min.   word count: 1
+Median word count: 13.0
+Mean   word count: 12.883395339729782
+Max.   word count: 47
+
+
+Summary statistics for the articles bodies:
+--------------------------------------------------------------------------------
+Min.   sentence count: 1
+Median sentence count: 16.0
+Mean   sentence count: 20.137703152535735
+Max.   sentence count: 100
+
+Min.   word count: 3
+Median word count: 405.0
+Mean   word count: 516.8520657920501
+Max.   word count: 19513
