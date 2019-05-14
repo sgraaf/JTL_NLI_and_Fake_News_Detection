@@ -57,6 +57,11 @@ def matrix_matmul(seq, weight, bias=None):
     i = 1
     for feature in seq:
         i += 1
+        #print(feature.size())
+        #print(feature.unsqueeze(0).size())
+        #print(feature)
+        #print(weight.size())
+        #print(weight.transpose(1,0).size())
         feature = torch.mm(feature, weight)
         if bias is not None:
             feature = feature + bias.expand(feature.size()[0], bias.size()[1])
