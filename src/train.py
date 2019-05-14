@@ -8,7 +8,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torchtext.data import BucketIterator
+from torchtext.data import BucketIterator #, Iterator
 
 from data import load_data
 from models import HierarchicalAttentionNet
@@ -40,21 +40,29 @@ RESULTS_DIR_DEFAULT = ROOT_DIR / 'output' / 'results'
 DATA_PERCENTAGE_DEFAULT = 1.00
 
 
-def doc_to_sents(document, text):
-    document, sent_tok = [], []
-    for word in document.text[0]:
-        sent_tok.append(word)
-        if word == text.vocab.itos.index('.'):
+def doc_to_sents(doc, text):
+    document, sent_tok, title_tok = [], [], []
+    sentence_terminals = ['.','!','?']
+    if len(doc.text[0]) > 1:
+        for word in doc.text[0]:
+            sent_tok.append(word)
+            if text.vocab.itos[word] in sentence_terminals:
+                if len(sent_tok) > 1:
+                    document.append(torch.tensor(sent_tok))
+                    sent_tok = []
+                else: 
+                    sent_tok = []
+        if not document:
             document.append(torch.tensor(sent_tok))
-            sent_tok = []
-        elif word == text.vocab.itos.index('!'):
-            document.append(torch.tensor(sent_tok))
-            sent_tok = []
-        elif word == text.vocab.itos.index('?'):
-            document.append(torch.tensor(sent_tok))
-            sent_tok = []   
+    if len(doc.title[0]) > 1:
+        for word in doc.title[0]:
+            title_tok.append(word)
+        document.append(torch.tensor(title_tok))
     return document
 
+def print_doc(doc, text):
+    for word in doc:
+        print(text.vocab.itos[word], end=' ')
 
 def train():
     model_type = FLAGS.model_type
@@ -132,10 +140,11 @@ def train():
     for i in range(epoch, MAX_EPOCHS):
         print(f'Epoch {i+1:0{len(str(MAX_EPOCHS))}}/{MAX_EPOCHS}:')
 
-        # TODO: train the model (and evaluate it throughout)
         train_i, val_i, test_i = BucketIterator.splits(
                 datasets=(FNN['train'], FNN['val'], FNN['test']),
                 batch_sizes=(BATCH_SIZE,BATCH_SIZE,BATCH_SIZE),
+                sort_key=lambda x: len(x.text[0]), # the BucketIterator needs to be told what function it should use to group the data.
+                #sort_within_batch=False,
                 shuffle=True)
         model.train()
         train_loss = 0.0
@@ -143,28 +152,49 @@ def train():
         val_loss = 0.0
         val_acc = []
         batchn = 0
+        fails = 0
+        failed = []
         for one_doc in train_i:
-            if batchn % 1000 == 0:
+            if batchn % 1 == 0:
                 print(f'Processed {batchn} batches')
+            batchn += 1
+            #print_doc(one_doc.text[0], TEXT)    
             optimizer.zero_grad()
             model._init_hidden_state()
             document = doc_to_sents(one_doc, TEXT)
-            preds = model(document)
+            try:
+                preds = model(document)
+            except:
+                print("couldn't process!")
+                failed.append(one_doc)
+                fails += 1
+                continue
             loss = loss_func(preds, one_doc.label)
             loss.backward()
             optimizer.step()
             train_loss += loss.item() * BATCH_SIZE
             acc = (one_doc.label == preds.argmax(dim=1)).float()
             train_acc.append(acc)
+            if batchn % 200 == 0:
+                break
         model.eval() # turn on evaluation mode
         val_loss = 0.0
+        valn = 0
         for one_doc in val_i:
+            print_doc(one_doc.text[0],TEXT)
+            print()
+            valn += 1
+            if valn % 100 == 0:
+                break
             document = doc_to_sents(one_doc, TEXT)
             preds = model(document)
             loss = loss_func(preds, one_doc.label)
             val_loss += loss.item() * BATCH_SIZE
             acc = (one_doc.label == preds.argmax(dim=1)).float()
             val_acc.append(acc)
+            valn += 1
+            if valn % 100 == 0:
+                break
         results['train_loss'].append(train_loss / len(FNN["train"]))        
         results['train_accuracy'].append(torch.tensor(train_acc).mean().item())
         results['val_loss'].append(val_loss / len(FNN["val"]))

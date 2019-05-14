@@ -45,10 +45,10 @@ def print_dataset_sizes(dataset, data_percentage, name):
     :param str name: the name of the dataset
     """
     print(f'{name} dataset size (using {data_percentage * 100:.0f}% of the data):')
-    longest_set_size = len(str(max(len(dataset['train']), len(dataset['dev']), len(dataset['test']))))
-    print(f'Train: {len(dataset["train"]): longest_set_size} samples')
-    print(f'Dev:   {len(dataset["dev"]): longest_set_size} samples')
-    print(f'Test:  {len(dataset["test"]): longest_set_size} samples')
+    longest_set_size = len(str(max(len(dataset['train']), len(dataset['val']), len(dataset['test']))))
+    print(f'Train: {len(dataset["train"])}:{longest_set_size} samples')
+    print(f'Dev:   {len(dataset["val"])}:{longest_set_size} samples')
+    print(f'Test:  {len(dataset["test"])}:{longest_set_size} samples')
     print()
 
 
@@ -57,6 +57,11 @@ def matrix_matmul(seq, weight, bias=None):
     i = 1
     for feature in seq:
         i += 1
+        #print(feature.size())
+        #print(feature.unsqueeze(0).size())
+        #print(feature)
+        #print(weight.size())
+        #print(weight.transpose(1,0).size())
         feature = torch.mm(feature, weight)
         if bias is not None:
             feature = feature + bias.expand(feature.size()[0], bias.size()[1])

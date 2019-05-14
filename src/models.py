@@ -51,7 +51,7 @@ class HierarchicalAttentionNet(nn.Module):
             output_list.append(output)
         output = torch.cat(output_list, 0)
         output, self.sent_hidden_state, _ = self.sent_att(output, self.sent_hidden_state)
-        print(output)
+        #print(output)
         return output
 
 """
