@@ -15,7 +15,7 @@ from models import HierarchicalAttentionNet
 from SentenceAttentionRNN import SentenceAttentionRNN
 from utils import (create_directories, load_latest_checkpoint, plot_results,
                    print_dataset_sizes, print_flags, print_model_parameters,
-                   save_results)
+                   save_results, save_model)
 from WordAttentionRNN import WordAttentionRNN
 
 # defaults
@@ -23,7 +23,7 @@ FLAGS = None
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 ROOT_DIR = Path.cwd().parent
 LEARNING_RATE = 0.05
-MAX_EPOCHS = 20
+MAX_EPOCHS = 5
 BATCH_SIZE = 1
 NUM_CLASSES_FN = 2
 
@@ -131,7 +131,7 @@ def train():
 
     # load the last checkpoint (if it exists)
     epoch, results, best_accuracy = load_latest_checkpoint(checkpoints_dir, model, optimizer)
-    results = {'train_loss':[], 'train_acc':[], 'val_loss': [], 'val_accuracy': []}
+    results = {'epoch':[], 'train_loss':[], 'train_accuracy':[], 'val_loss': [], 'val_accuracy': []}
     if epoch == 0:
         print(f'Starting training at epoch {epoch + 1}...')
     else:
@@ -155,10 +155,9 @@ def train():
         fails = 0
         failed = []
         for one_doc in train_i:
-            if batchn % 1 == 0:
+            if batchn % 1000 == 0:
                 print(f'Processed {batchn} batches')
             batchn += 1
-            #print_doc(one_doc.text[0], TEXT)    
             optimizer.zero_grad()
             model._init_hidden_state()
             document = doc_to_sents(one_doc, TEXT)
@@ -181,11 +180,9 @@ def train():
         val_loss = 0.0
         valn = 0
         for one_doc in val_i:
-            print_doc(one_doc.text[0],TEXT)
-            print()
+            #print_doc(one_doc.text[0],TEXT)
+            #print()
             valn += 1
-            if valn % 100 == 0:
-                break
             document = doc_to_sents(one_doc, TEXT)
             preds = model(document)
             loss = loss_func(preds, one_doc.label)
@@ -193,16 +190,17 @@ def train():
             acc = (one_doc.label == preds.argmax(dim=1)).float()
             val_acc.append(acc)
             valn += 1
-            if valn % 100 == 0:
-                break
+        results['epoch'].append(i)
         results['train_loss'].append(train_loss / len(FNN["train"]))        
         results['train_accuracy'].append(torch.tensor(train_acc).mean().item())
         results['val_loss'].append(val_loss / len(FNN["val"]))
         results['val_accuracy'].append(torch.tensor(val_acc).mean().item())
+        print(results)
         
     # save and plot the results
     save_results(results_dir, results, model)
     plot_results(results_dir, results, model)
+    save_model(models_dir, model)
 
 
 def main():

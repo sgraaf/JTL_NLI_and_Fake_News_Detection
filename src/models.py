@@ -47,6 +47,7 @@ class HierarchicalAttentionNet(nn.Module):
         #print(sentence.size())
         #sentence = sentence.permute(1, 0, 2)
         for sentence in document:
+            #packed_sents = nn.utils.rnn.pack_padded_sequence(sentence, lens,batch_first=True)
             output, self.word_hidden_state, _ = self.word_att(sentence, self.word_hidden_state)
             output_list.append(output)
         output = torch.cat(output_list, 0)

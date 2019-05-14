@@ -212,7 +212,7 @@ def plot_results(results_dir, results, model):
     results_df = df.from_dict(results)
 
     fig, ax1 = plt.subplots()
-    ax1.plot(results_df['epoch'], results_df['dev_accuracy'], color='tab:orange', marker='o', label='Dev accuracy')
+    ax1.plot(results_df['epoch'], results_df['val_accuracy'], color='tab:orange', marker='o', label='Val accuracy')
     ax1.plot(results_df['epoch'], results_df['train_accuracy'], color='tab:red', marker='o', label='Train accuracy')
     ax1.set_xlabel('Epoch')
     ax1.set_ylabel('Accuracy')
@@ -220,7 +220,7 @@ def plot_results(results_dir, results, model):
     ax1.set_ylim([0, 1])
 
     ax2 = ax1.twinx()
-    ax2.plot(results_df['epoch'], results_df['dev_loss'], color='tab:blue', marker='o', label='Dev loss')
+    ax2.plot(results_df['epoch'], results_df['val_loss'], color='tab:blue', marker='o', label='Val loss')
     ax2.plot(results_df['epoch'], results_df['train_loss'], color='tab:green', marker='o', label='Train loss')
     ax2.set_ylabel('Loss')
     ax2.tick_params('y')
