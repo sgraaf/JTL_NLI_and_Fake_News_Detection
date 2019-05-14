@@ -45,10 +45,10 @@ def print_dataset_sizes(dataset, data_percentage, name):
     :param str name: the name of the dataset
     """
     print(f'{name} dataset size (using {data_percentage * 100:.0f}% of the data):')
-    longest_set_size = len(str(max(len(dataset['train']), len(dataset['dev']), len(dataset['test']))))
-    print(f'Train: {len(dataset["train"]): longest_set_size} samples')
-    print(f'Dev:   {len(dataset["dev"]): longest_set_size} samples')
-    print(f'Test:  {len(dataset["test"]): longest_set_size} samples')
+    longest_set_size = len(str(max(len(dataset['train']), len(dataset['val']), len(dataset['test']))))
+    print(f'Train: {len(dataset["train"]):<{longest_set_size}} samples')
+    print(f'Dev:   {len(dataset["val"]):<{longest_set_size}} samples')
+    print(f'Test:  {len(dataset["test"]):<{longest_set_size}} samples')
     print()
 
 
