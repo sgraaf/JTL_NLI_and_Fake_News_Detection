@@ -3,6 +3,9 @@ import pickle as pkl
 import torch
 import torch.utils.data as data
 
+MAX_DOC_LEN = 100
+MAX_SENT_LEN = 40
+EMBEDDING_DIM = 300
 
 class FNNDataset(data.Dataset):
 
@@ -15,28 +18,33 @@ class FNNDataset(data.Dataset):
         article = self.articles[idx]
         label = self.labels[idx]
         
-        # determine the longest sentence in the article
-        max_sent_len = max([len(sentence) for sentence in article])
-        
         article_embed = []
         for sentence in article:
             # pad the sentence
-            sentence_pad = sentence +['<pad>'] * (max_sent_len - len(sentence))
+            sentence_pad = sentence +['<pad>'] * (MAX_SENT_LEN - len(sentence))
             
             # embed the sentence
             sentence_embed = torch.stack([self.GloVe_vectors[word] if word in self.GloVe_vectors.stoi else self.GloVe_vectors[word.lower()] for word in sentence_pad])
             
             article_embed.append(sentence_embed)
         
-        # create article embedding of shape (document length, max_sent_len, embedding_dim)
+        # pad the article
+        article_embed += [torch.zeros(MAX_SENT_LEN, 300)] * (MAX_DOC_LEN - len(article_embed))
+
+        # create article embedding of shape (MAX_DOC_LEN, MAX_SENT_LEN, embedding_dim)
         article_embed = torch.stack(article_embed)
         
         return article_embed, label
+    
+    def __len__(self):
+        return len(self.labels)
 
-    def load_data(self, file_path):
+    @staticmethod
+    def load_data(file_path):
         dataset = pkl.load(open(file_path, 'rb'))
         return dataset['articles'], dataset['labels']
 
     @property
     def size(self):
         return len(self.labels)
+    
