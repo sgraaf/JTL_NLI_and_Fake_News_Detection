@@ -8,20 +8,24 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torchtext.data import BucketIterator #, Iterator
+from torchtext.data import BucketIterator  # , Iterator
 
 from data import load_data
 from models import HierarchicalAttentionNet
 from SentenceAttentionRNN import SentenceAttentionRNN
 from utils import (create_directories, load_latest_checkpoint, plot_results,
                    print_dataset_sizes, print_flags, print_model_parameters,
-                   save_results, save_model)
+                   save_model, save_results)
 from WordAttentionRNN import WordAttentionRNN
-
 
 # defaults
 FLAGS = None
-DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+if torch.cuda.is_available():
+    DEVICE = torch.device('cuda')
+    torch.set_default_tensor_type('torch.cuda.FloatTensor')
+else:
+    DEVICE = torch.device('cpu')
+
 ROOT_DIR = Path.cwd().parent
 LEARNING_RATE = 0.05
 MAX_EPOCHS = 5
@@ -92,7 +96,7 @@ def train():
         SNLI, FNN, TEXT, LABEL = load_data(data_dir, data_percentage, only_fn=only_fn)
     embedding = nn.Embedding.from_pretrained(TEXT.vocab.vectors)
     embedding.requires_grad = False
-    embedding = embedding.to(DEVICE)
+    # embedding = embedding.to(DEVICE)
 
     # print the dataset sizes
     if not only_fn:
@@ -132,8 +136,6 @@ def train():
         lr=LEARNING_RATE
     )
     
-    loss_func.to('cuda')
-    
     # load the last checkpoint (if it exists)
     epoch, results, best_accuracy = load_latest_checkpoint(checkpoints_dir, model, optimizer)
     results = {'epoch':[], 'train_loss':[], 'train_accuracy':[], 'val_loss': [], 'val_accuracy': []}
@@ -145,21 +147,13 @@ def train():
     for i in range(epoch, MAX_EPOCHS):
         print(f'Epoch {i+1:0{len(str(MAX_EPOCHS))}}/{MAX_EPOCHS}:')
 
-        if torch.cuda.is_available():
-            train_i, val_i, test_i = BucketIterator.splits(
-                    datasets=(FNN['train'], FNN['val'], FNN['test']),
-                    batch_sizes=(BATCH_SIZE,BATCH_SIZE,BATCH_SIZE),
-                    device=torch.cuda.current_device(),
-                    sort_key=lambda x: len(x.text[0]), # the BucketIterator needs to be told what function it should use to group the data.
-                    #sort_within_batch=False,
-                    shuffle=True)
-        else:
-            train_i, val_i, test_i = BucketIterator.splits(
-                    datasets=(FNN['train'], FNN['val'], FNN['test']),
-                    batch_sizes=(BATCH_SIZE,BATCH_SIZE,BATCH_SIZE),
-                    sort_key=lambda x: len(x.text[0]), # the BucketIterator needs to be told what function it should use to group the data.
-                    #sort_within_batch=False,
-                    shuffle=True)
+        train_i, val_i, test_i = BucketIterator.splits(
+                datasets=(FNN['train'], FNN['val'], FNN['test']),
+                batch_sizes=(BATCH_SIZE,BATCH_SIZE,BATCH_SIZE),
+                device=DEVICE,
+                sort_key=lambda x: len(x.text[0]), # the BucketIterator needs to be told what function it should use to group the data.
+                #sort_within_batch=False,
+                shuffle=True)
         model.train()
         train_loss = 0.0
         train_acc = []
