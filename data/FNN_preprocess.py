@@ -13,7 +13,6 @@ from pathlib import Path
 from nltk import tokenize
 import pickle as pkl
 
-
 def is_valid_article(title, text, ILLEGAL_PATTERNS):
     # check the title
     for illegal_pattern in ILLEGAL_PATTERNS['title']:
@@ -70,6 +69,9 @@ ILLEGAL_PATTERNS = {
     ]
 }
 
+MAX_DOC_LEN = 100
+MAX_SENT_LEN = 40
+
 FNN_DIR = Path(__file__).resolve().parent.parent / 'fakenewsnet_dataset'
 DATA_DIR = Path(__file__).resolve().parent
 JSON_FILES = sorted(FNN_DIR.rglob('*.json'))
@@ -101,11 +103,13 @@ for json_file in JSON_FILES:
             if len(tokenize.word_tokenize(text)) > 1:  # No single-word article bodies
                 # tokenize the article
                 article_sentences = tokenize.sent_tokenize(title) + tokenize.sent_tokenize(text)
-                article_sentences_words = [tokenize.word_tokenize(sentence) for sentence in article_sentences]
 
-                # append the article and label
-                dataset['articles'].append(article_sentences_words)
-                dataset['labels'].append(label)
+                if len(article_sentences) <= MAX_DOC_LEN:  # No articles with more than 100 sentences
+                    article_sentences_words = [tokenize.word_tokenize(sentence) for sentence in article_sentences if len(tokenize.word_tokenize(sentence)) <= MAX_SENT_LEN]
+
+                    # append the article and label
+                    dataset['articles'].append(article_sentences_words)
+                    dataset['labels'].append(label)
 
 # pickle the dataset
 dataset_path = DATA_DIR / 'FNN.pkl'
