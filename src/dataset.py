@@ -55,32 +55,12 @@ class FNNDataset(data.Dataset):
         return len(self.labels)
 
 
-def sort_pad_batch(batch):
-    articles, labels = list(zip(*batch))
-    
-    # convert articles and labels to list
-    articles = list(articles)
-    labels = list(labels)
-
-    # sort the articles in reverse order of document length and sentence length
-    articles.sort(reverse=True, key=lambda article: article.shape[1])
-    articles.sort(reverse=True, key=lambda article: article.shape[0])
-
-    # pad the articles with zeroes
-    max_doc_len = max([article.shape[0] for article in articles])
-    max_sent_len = max([article.shape[1] for article in articles])
-    articles_padded = [F.pad(article, (0, 0, 0, max_sent_len - article.shape[1], 0, max_doc_len - article.shape[0])) for article in articles]
-
-
 class SortPadBatch(object):
     def __call__(self, batch):
 		# batch is a tuple (articles, labels).
         articles, labels = list(zip(*batch))
-#        print(articles)
-#        print(type(articles))
-#        print(labels)
-#        print(type(labels))
-        
+    
+        # convert tuples to lists
         articles = list(articles)
         labels = list(labels)
 
