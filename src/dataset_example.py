@@ -1,4 +1,5 @@
-from torchtext.vocab import GloVe
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-from torchtext.vocab import GloVe
 from pathlib import Path
 from dataset import FNNDataset
 import torch.utils.data as data
