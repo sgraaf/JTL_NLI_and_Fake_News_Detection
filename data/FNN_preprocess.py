@@ -89,9 +89,9 @@ dataset = {
 
 for json_file in JSON_FILES:
     if '/real/' in str(json_file):
-        label = 'real'
+        label = 0
     else:
-        label = 'fake' 
+        label = 1 
 
     with open(json_file) as jf:
         json_dict = json.load(jf)
