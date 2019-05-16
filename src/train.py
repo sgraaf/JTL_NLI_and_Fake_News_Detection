@@ -14,6 +14,7 @@ import torch.optim as optim
 from torchtext.data import BucketIterator  # , Iterator
 
 from data import load_data
+from dataset import FNNDataset, SortPadBatch
 from models import HierarchicalAttentionNet
 from SentenceAttentionRNN import SentenceAttentionRNN
 from utils import (create_directories, load_latest_checkpoint, plot_results,
