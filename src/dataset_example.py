@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-from torchtext.vocab import GloVe
+# -*- coding: utf-8 -*-
 from pathlib import Path
-from dataset import FNNDataset, SortPadBatch
+
 import torch.utils.data as data
+from torchtext.vocab import GloVe
+
+from dataset import FNNDataset, SortPadBatch
 
 FNN_path = Path().cwd().parent / 'data' / 'FNN.pkl'
 
