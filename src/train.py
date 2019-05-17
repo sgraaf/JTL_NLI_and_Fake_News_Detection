@@ -14,13 +14,13 @@ import torch.optim as optim
 from torchtext.data import BucketIterator  # , Iterator
 
 from data import load_data
-from dataset import FNNDataset, SortPadBatch
+from dataset import FNNDataset, PadSortBatch
 from models import HierarchicalAttentionNet
-from SentenceAttentionRNN import SentenceAttentionRNN
+# from SentenceAttentionRNN import SentenceAttentionRNN
 from utils import (create_directories, load_latest_checkpoint, plot_results,
                    print_dataset_sizes, print_flags, print_model_parameters,
                    save_model, save_results)
-from WordAttentionRNN import WordAttentionRNN
+#from encoders import WordAttentionRNN
 
 # defaults
 FLAGS = None
