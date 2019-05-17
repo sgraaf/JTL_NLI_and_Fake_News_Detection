@@ -7,6 +7,7 @@ import torch
 import torch.nn.functional as F
 import torch.utils.data as data
 
+
 # MAX_DOC_LEN = 100
 # MAX_SENT_LEN = 40
 EMBEDDING_DIM = 300
@@ -22,7 +23,8 @@ class FNNDataset(data.Dataset):
         article = self.articles[idx]
         label = self.labels[idx]
         
-        MAX_SENT_LEN = max([len(sentence) for sentence in article])
+        sent_lens = [len(sentence) for sentence in article]
+        MAX_SENT_LEN = max(sent_lens)
 
         article_embed = []
         for sentence in article:
@@ -40,7 +42,7 @@ class FNNDataset(data.Dataset):
         # create article embedding of shape (MAX_DOC_LEN, MAX_SENT_LEN, embedding_dim)
         article_embed = torch.stack(article_embed)
         
-        return article_embed, label
+        return article_embed, sent_lens, label
     
     def __len__(self):
         return len(self.labels)
@@ -55,28 +57,22 @@ class FNNDataset(data.Dataset):
         return len(self.labels)
 
 
-class SortPadBatch(object):
+class PadSortBatch(object):
     def __call__(self, batch):
-		# batch is a tuple (articles, labels).
-        articles, labels = list(zip(*batch))
-    
-        # convert tuples to lists
-        articles = list(articles)
-        labels = list(labels)
-
-        # sort the articles in reverse order of document length and sentence length
-        articles.sort(reverse=True, key=lambda article: article.shape[1])
-        articles.sort(reverse=True, key=lambda article: article.shape[0])
-
-        # determine article_dims
-        article_dims = [tuple(article.shape[:2]) for article in articles]
+		# sort the batch
+        batch_sorted_sent = sorted(batch, key=lambda x: x[0].shape[1], reverse=True)
+        batch_sorted_doc = sorted(batch_sorted_sent, key=lambda x: x[0].shape[0], reverse=True)
+        
+        # unpack the batch
+        articles_sorted, article_dims_sorted, labels_sorted = map(list, zip(*batch_sorted_doc))       
 
         # pad the articles with zeroes
-        max_doc_len = max([article.shape[0] for article in articles])
-        max_sent_len = max([article.shape[1] for article in articles])
-        articles_padded = torch.stack([F.pad(article, (0, 0, 0, max_sent_len - article.shape[1], 0, max_doc_len - article.shape[0])) for article in articles])
+        max_doc_len = max([article.shape[0] for article in articles_sorted])
+        max_sent_len = max([article.shape[1] for article in articles_sorted])
+        articles_padded = [F.pad(article, (0, 0, 0, max_sent_len - article.shape[1], 0, max_doc_len - article.shape[0])) for article in articles_sorted]
 
-        # convert the labels to torch.LongTensor
-        labels_tensor = torch.LongTensor(labels)
+        # convert articles and labels to tensors
+        articles_tensor = torch.stack(articles_padded)
+        labels_tensor = torch.LongTensor(labels_sorted)
         
-        return articles_padded, article_dims, labels_tensor
+        return articles_tensor, article_dims_sorted, labels_tensor
