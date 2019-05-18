@@ -3,6 +3,7 @@
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.nn.utils.rnn import pack_padded_sequence as Pack
 from torch.nn.utils.rnn import pad_packed_sequence as Pad
 
@@ -34,10 +35,10 @@ class EmbedAttention(nn.Module):
         return masked_softmax
 
 
-class WordAttentionRNN(nn.Module):
+class SentAttentionRNN(nn.Module):
 
     def __init__(self, input_dim, hidden_dim):
-        super(WordAttentionRNN, self).__init__()
+        super(SentAttentionRNN, self).__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
 
@@ -51,10 +52,11 @@ class WordAttentionRNN(nn.Module):
 
         # initialize the attention parameters
         self.linear = nn.Linear(self.hidden_dim * 2, self.hidden_dim * 2)
-        self.embed_attend = EmbedAttention(self.hidden_dim * 2)
+        self.attend_weights = nn.Linear(self.hidden_dim * 2, 1, bias=False)
 
     def forward(self, batch, batch_dims):
         doc_lens = [len(dim) for dim in batch_dims]
+        max_doc_len = max(doc_lens)
         sents_lens = batch_dims
         sent_embeds = []
 
@@ -74,29 +76,89 @@ class WordAttentionRNN(nn.Module):
 
             # print(f'unpadded article shape: {article.shape}')
 
-            # pack the article
+            # pack the article (batch)
             article_packed = Pack(article_sorted, sent_lens_sorted, batch_first=True)
 
-            # run the packed batch through the LSTM cell
+            # run the packed article (batch) through the LSTM cell
             article_encoded_packed, _ = self.LSTM_cell(article_packed)
 
-            # unpack the batch
-            article_encoded, article_encodes_lens = Pad(article_encoded_packed, batch_first=True)
+            # unpack the article (batch)
+            article_encoded, article_encoded_lens = Pad(article_encoded_packed, batch_first=True)
 
             # print(f'encoded article shape: {article_encoded.shape}')
 
             # compute the attention
             hidden_embed = torch.tanh(self.linear(article_encoded))
-            attended = self.embed_attend(hidden_embed, article_encodes_lens) * article_encoded
+            attention = self.attend_weights(hidden_embed).squeeze(-1)
+            mask = torch.arange(attention.shape[1])[None, :] < article_encoded_lens[:, None]  # create the mask
+            attention[~mask] = -float('inf')  # mask the attention
+            masked_softmax = torch.softmax(attention, dim=1).unsqueeze(-1)  # perform softmax
+            attended = masked_softmax * article_encoded
+            
+            # sum to obtain sentence representations
+            attended_sum = attended.sum(1, keepdim=True).squeeze(1)
+            
+            # pad to stack
+            attended_pad = F.pad(attended_sum, (0, 0, 0, max_doc_len - attended_sum.shape[0]))
 
-            sent_embeds.append(attended.sum(0, keepdim=True).squeeze(0))
+            sent_embeds.append(attended_pad)
             
             # print(f'attended encoded article shape: {sent_embeds[-1].shape}')
         
-        return sent_embeds
+        return torch.stack(sent_embeds)
     
     
-class SentenceAttentionRNN(nn.Module):
+class DocAttentionRNN(nn.Module):
+
+    def __init__(self, input_dim, hidden_dim):
+        super(DocAttentionRNN, self).__init__()
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+
+        # initialize the GRU cell
+        self.LSTM_cell = nn.LSTM(
+            input_size=self.input_dim,
+            hidden_size=self.hidden_dim,
+            batch_first=True,
+            bidirectional=True
+        )
+
+        # initialize the attention parameters
+        self.linear = nn.Linear(self.hidden_dim * 2, self.hidden_dim * 2)
+        self.attend_weights = nn.Linear(self.hidden_dim * 2, 1, bias=False)
+
+    def forward(self, batch, batch_dims):
+        doc_lens = torch.LongTensor([len(dim) for dim in batch_dims])
+        
+        # sort
+        doc_lens_sorted, sort_idxs = torch.sort(doc_lens, dim=0, descending=True)
+        batch_sorted = batch[sort_idxs, :]
+
+        # pack the batch
+        batch_packed = Pack(batch_sorted, doc_lens_sorted, batch_first=True)
+
+        # run the packed batch through the LSTM cell
+        batch_encoded_packed, _ = self.LSTM_cell(batch_packed)
+
+        # unpack the batch
+        batch_encoded, batch_encoded_lens = Pad(batch_encoded_packed, batch_first=True)
+
+
+        # compute the attention
+        hidden_embed = torch.tanh(self.linear(batch_encoded))
+        attention = self.attend_weights(hidden_embed).squeeze(-1)
+        mask = torch.arange(attention.shape[1])[None, :] < batch_encoded_lens[:, None]  # create the mask
+        attention[~mask] = -float('inf')  # mask the attention
+        masked_softmax = torch.softmax(attention, dim=1).unsqueeze(-1)  # perform softmax
+        attended = masked_softmax * batch_encoded
+        
+        # sum to obtain doc representations
+        attended_sum = attended.sum(1, keepdim=True).squeeze(1)
+        
+        return attended_sum
+    
+    
+class OldSentenceAttentionRNN(nn.Module):
 
     def __init__(self, input_dim, hidden_dim, num_classes):
         super(SentenceAttentionRNN, self).__init__()

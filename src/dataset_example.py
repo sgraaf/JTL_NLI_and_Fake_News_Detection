@@ -43,7 +43,9 @@ FNN_DL = data.DataLoader(
 for step, batch in enumerate(FNN_DL):
     articles, article_dims, labels = batch
     
-    sent_embeds = model(articles, article_dims)
+    out = model(articles, article_dims)
+    
+    print(f'accuracy: {(out.argmax(dim=1) == labels).float().mean()}')
     
     if step == 10:
         break

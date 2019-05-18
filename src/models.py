@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from encoders import WordAttentionRNN
+from encoders import SentAttentionRNN, DocAttentionRNN
 
 
 class HierarchicalAttentionNet(nn.Module):
@@ -18,30 +18,29 @@ class HierarchicalAttentionNet(nn.Module):
         self.embedding = embedding
         self.dropout = dropout
 
-        self.word_attend = WordAttentionRNN(self.input_dim, self.hidden_dim)
-        # self.sent_attend = BiAttentionRNN(self.hidden_dim * 2, self.hidden_dim)
-        # self.classifier = nn.Linear(self.hidden_dim * 2, self.num_classes)
+        self.sent_attend = SentAttentionRNN(self.input_dim, self.hidden_dim)
+        self.doc_attend = DocAttentionRNN(self.hidden_dim * 2, self.hidden_dim)
+        self.classifier = nn.Linear(self.hidden_dim * 2, self.num_classes)
         # self._init_hidden_state()
 
 
     def forward(self, batch, batch_dims):
-        print(f'batch shape: {batch.shape}')
-        print(f'batch dims: {batch_dims}')
+        # print(f'batch shape: {batch.shape}')
+        # print(f'batch dims: {batch_dims}')
         
         # apply dropout to the batch
         batch_dropout = F.dropout(batch, p=self.dropout, training=self.training)
 
         # get the sentence embeddings
-        sent_embeds = self.word_attend(batch_dropout, batch_dims)
+        sent_embeds = self.sent_attend(batch_dropout, batch_dims)
 
         # get the document embeddings
-        # doc_embeds = self.sent_attend(sent_embeds, batch_dims)
+        doc_embeds = self.doc_attend(sent_embeds, batch_dims)
         
         # get the classification
-        # out = self.classifier(doc_embeds)
+        out = self.classifier(doc_embeds)
 
-        return sent_embeds
-        # return out
+        return out
         
         
         
