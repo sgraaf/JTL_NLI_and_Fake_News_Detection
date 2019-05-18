@@ -23,4 +23,9 @@ fakenewsnet_dataset/
 # GloVe and SNLI
 src/.data/
 src/.vector_cache/
+
+#  FNN
 *.pkl
+
+# ELMo
+data/elmo/
