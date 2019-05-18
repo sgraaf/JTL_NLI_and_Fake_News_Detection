@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 """
 IMPORTANT:
     
@@ -6,14 +9,12 @@ it just dumps the collection of JSON files into train/val/test splits
 
 """
 
-import csv
 import json
 import re
 from pathlib import Path
 
 from nltk import tokenize
-from pandas import DataFrame as df
-
+import pickle as pkl
 
 def is_valid_article(title, text, ILLEGAL_PATTERNS):
     # check the title
@@ -71,7 +72,10 @@ ILLEGAL_PATTERNS = {
     ]
 }
 
-FNN_DIR = Path(__file__).resolve().parent.parent / 'data'
+MAX_DOC_LEN = 100
+MAX_SENT_LEN = 40
+
+FNN_DIR = Path(__file__).resolve().parent.parent / 'fakenewsnet_dataset'
 DATA_DIR = Path(__file__).resolve().parent
 JSON_FILES = sorted(FNN_DIR.rglob('*.json'))
 
@@ -81,26 +85,35 @@ news_content = {
     'label': []
 }
 
+dataset = {
+    'articles': [],
+    'labels': []
+}
+
 for json_file in JSON_FILES:
     if '/real/' in str(json_file):
-        label = 'real'
+        label = 0
     else:
-        label = 'fake' 
+        label = 1 
 
     with open(json_file) as jf:
         json_dict = json.load(jf)
         title = json_dict['title'].strip()
-        text = json_dict['text'].strip().replace('\n', ' ')
+        text = json_dict['text'].strip()
 
     if len(title) > 0 and len(text) > 0:  # No empty article titles or bodies
-        if len(tokenize.word_tokenize(text)) > 1:  # No single-word article bodies
-            if is_valid_article(title, text, ILLEGAL_PATTERNS):  # No illegal patterns in article titles or bodies
-                text_sentences = tokenize.sent_tokenize(text)
-                if len(text_sentences) <= 100:  # no article bodies with more than 100 sentences
-                    news_content['title'].append(title)
-                    news_content['text'].append(text)
-                    news_content['label'].append(label)
+        if is_valid_article(title, text, ILLEGAL_PATTERNS):  # No illegal patterns in article titles or bodies
+            if len(tokenize.word_tokenize(text)) > 1:  # No single-word article bodies
+                # tokenize the article
+                article_sentences = tokenize.sent_tokenize(title) + tokenize.sent_tokenize(text)
 
-df = df.from_dict(news_content)
-df_path = DATA_DIR / 'FNN_clipped.csv'
-df.to_csv(df_path, sep=';', encoding='utf-8', quoting=csv.QUOTE_NONNUMERIC, index=False)
+                if len(article_sentences) <= MAX_DOC_LEN:  # No articles with more than 100 sentences
+                    article_sentences_words = [tokenize.word_tokenize(sentence) for sentence in article_sentences if len(tokenize.word_tokenize(sentence)) <= MAX_SENT_LEN]
+
+                    # append the article and label
+                    dataset['articles'].append(article_sentences_words)
+                    dataset['labels'].append(label)
+
+# pickle the dataset
+dataset_path = DATA_DIR / 'FNN.pkl'
+pkl.dump(dataset, open(dataset_path, 'wb'))
