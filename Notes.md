@@ -37,6 +37,9 @@ After further research and discussion, we have now settled on a "hybrid" model, 
 
 We're still not entirely sure on which Dataset to use: While we have been able to succesfully scrape the FakeNewsNet articles using the code provided by the paper authors, SOTA research incorporates the rich social metadata, which is not something we intend to do. We're also exploring the factcheck dataset.
 
+
+
+
 ### Action points
 - [ ] Implement the sentence encoder based on the HAN architecture
 - [ ] Implement the document encoder based on the HAN architecture
@@ -44,3 +47,17 @@ We're still not entirely sure on which Dataset to use: While we have been able t
 
 ### Questions
 - The HAN architecture uses GRU's for their RNN. Should we also use GRU's or should we use LSTM's? It seems like we could easily swap the one for the other.
+
+### Questions (from May 15)
+- How to properly weigh the losses? One approach is to weight them all equally (Augenstein et al., 2018), but this seems not directly applicable for our case.
+
+
+### Points for future research
+- Apply different loss weighting technique (e.g. based on uncertainty, Kendall et al., 2018).
+
+
+
+
+#### References:
+Kendall, A., Gal, Y., & Cipolla, R. (2018). Multi-task learning using uncertainty to weigh losses for scene geometry and semantics. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition (pp. 7482-7491).
+Augenstein, I., Ruder, S., & Søgaard, A. (2018). Multi-task learning of pairwise sequence classification tasks over disparate label spaces. arXiv preprint arXiv:1802.09913.
