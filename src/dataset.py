@@ -3,20 +3,18 @@
 
 import pickle as pkl
 
+from allennlp.modules.elmo import batch_to_ids
 import torch
 import torch.nn.functional as F
 import torch.utils.data as data
 
 
-# MAX_DOC_LEN = 100
-# MAX_SENT_LEN = 40
-EMBEDDING_DIM = 300
-
 class FNNDataset(data.Dataset):
 
-    def __init__(self, file_path, GloVe_vectors):
+    def __init__(self, file_path, GloVe_vectors, ELMo):
         super(FNNDataset, self).__init__()
-        self.GloVe_vectors = GloVe_vectors
+        self.GloVe = GloVe_vectors
+        self.ELMo = ELMo
         self.articles, self.labels = self.load_data(file_path)
 
     def __getitem__(self, idx):
@@ -25,22 +23,18 @@ class FNNDataset(data.Dataset):
         
         sent_lens = [len(sentence) for sentence in article]
         MAX_SENT_LEN = max(sent_lens)
-
-        article_embed = []
-        for sentence in article:
-            # pad the sentence
-            sentence_pad = sentence +['<pad>'] * (MAX_SENT_LEN - len(sentence))
-            
-            # embed the sentence
-            sentence_embed = torch.stack([self.GloVe_vectors[word] if word in self.GloVe_vectors.stoi else self.GloVe_vectors[word.lower()] for word in sentence_pad])
-            
-            article_embed.append(sentence_embed)
         
-        # pad the article
-        # article_embed += [torch.zeros(MAX_SENT_LEN, 300)] * (MAX_DOC_LEN - len(article_embed))
-
-        # create article embedding of shape (MAX_DOC_LEN, MAX_SENT_LEN, embedding_dim)
-        article_embed = torch.stack(article_embed)
+        # get the GloVe embeddings
+        GloVe_embed = torch.stack([torch.stack([self.GloVe[word] if word in self.GloVe.stoi else self.GloVe[word.lower()] for word in sent + ['<pad>'] * (MAX_SENT_LEN - len(sent))]) for sent in article])
+        # print(GloVe_embeddings.shape)
+        
+        # get the ELMo embeddings
+        ELMo_character_ids = batch_to_ids(article)
+        ELMo_embed = self.ELMo(ELMo_character_ids)['elmo_representations'][0]
+        # print(ELMo_embeddings.shape)
+        
+        # concat the GloVe and ELMo embeddings
+        article_embed = torch.cat([GloVe_embed, ELMo_embed], dim=2)
         
         return article_embed, sent_lens, label
     
