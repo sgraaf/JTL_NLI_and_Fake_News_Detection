@@ -7,7 +7,7 @@ from utils import attention_mul, matrix_matmul
 
 class WordAttentionRNN(nn.Module):
 
-    def __init__(self, input_dim, hidden_dim):
+    def __init__(self, input_dim, hidden_dim, num_classes=None):
         super(WordAttentionRNN, self).__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
@@ -22,7 +22,13 @@ class WordAttentionRNN(nn.Module):
             hidden_size=self.hidden_dim,
             bidirectional=True
         )
-
+        if num_classes is not None:
+            self.num_classes = num_classes
+            self.linear = nn.Linear(
+                in_features=2*self.hidden_dim,
+                out_features=self.num_classes
+            )
+        
         # initialize the attention parameters
         mu = 0.0
         sigma = 0.05
@@ -49,4 +55,7 @@ class WordAttentionRNN(nn.Module):
         word_attn_vecs = attention_mul(word_output, word_attention_norm.unsqueeze(0).transpose(1, 0))
 
         return word_attn_vecs, word_hidden, word_attention_norm
-
+    
+    def predict(self, word_vecs):
+        output = self.linear(word_vecs.squeeze(0))
+        return output
