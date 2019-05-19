@@ -10,25 +10,26 @@ from encoders import SentAttentionRNN, DocAttentionRNN
 
 class HierarchicalAttentionNet(nn.Module):
         # initialize the model
-    def __init__(self, input_dim, hidden_dim, num_classes_task1, embedding, 
-                 num_classes_task2=None, dropout=0):
+    def __init__(self, input_dim, hidden_dim, num_classes_task_fn, embedding, 
+                 num_classes_task_nli=None, dropout=0):
         super(HierarchicalAttentionNet, self).__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
-        self.num_classes_task1 = num_classes_task1
+        self.num_classes_task_fn = num_classes_task_fn
         self.embedding = embedding
         self.dropout = dropout
 
         self.sent_attend = SentAttentionRNN(self.input_dim, self.hidden_dim)
         self.doc_attend = DocAttentionRNN(self.hidden_dim * 2, self.hidden_dim)
-        self.fnn_classifier = nn.Linear(self.hidden_dim * 2, self.num_classes)
+        self.fnn_classifier = nn.Linear(self.hidden_dim * 2, self.num_classes_task_fn)
         
-        if num_classes_task2 is not None:
-            self.num_classes_task2 = num_classes_task2
-            self.snli_classifier = nn.Linear(self.hidden_dim * 2 * 4, self.num_classes)
+        if num_classes_task_nli is not None:
+            self.num_classes_task_nli = num_classes_task_nli
+            self.snli_classifier = nn.Linear(self.hidden_dim * 2 * 4, 
+                                             self.num_classes_task_nli)
 
 
-    def forward(self, batch, batch_dims, task='FN'):
+    def forward(self, batch, batch_dims, task='FN', batch_hyp=None, batch_hyp_dims=None):
         # print(f'batch shape: {batch.shape}')
         # print(f'batch dims: {batch_dims}')
         
@@ -37,7 +38,6 @@ class HierarchicalAttentionNet(nn.Module):
 
         # get the sentence embeddings
         sent_embeds = self.sent_attend(batch_dropout, batch_dims)
-        
         if task == 'FN':
             # get the document embeddings
             doc_embeds = self.doc_attend(sent_embeds, batch_dims)
@@ -45,18 +45,24 @@ class HierarchicalAttentionNet(nn.Module):
             # get the classification
             out = self.fnn_classifier(doc_embeds)
         elif task == 'NLI':
-            # get embedding for sentence of paris
-            sent_pair_embeds = self.concat_embed(u, v)
+            
+            # squeeze the premises
+            sent_embeds = torch.squeeze(sent_embeds)
+                    
+            # get the hypothesis embeddings
+            batch_dropout_hyp = F.dropout(batch_hyp, p=self.dropout, training=self.training)
+            sent_hyp_embeds = torch.squeeze(self.sent_attend(batch_dropout_hyp, batch_hyp_dims))
+            
+            # get embedding for sentence of pairs
+            sent_pair_embeds = self.concat_embed(sent_embeds, sent_hyp_embeds)
             
             # get the classification
             out = self.snli_classifier(sent_pair_embeds)
         return out
     
-    def concat_embed(u,v):
+    def concat_embed(self, u, v):
         concat = torch.cat((u, v, (u-v).abs(), u*v), dim=1)
         return concat
-        
-        
         
         
         

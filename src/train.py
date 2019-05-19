@@ -1,3 +1,15 @@
+"""
+NOTE
+Due to some problems with the CUDA/GPU memory loads, 
+we had to change some code in the torch library.
+Namely, in the rnn.py and functional.py scripts in torch
+there are some added cpu/cuda assignments. 
+The code will work on both cpu and gpu. 
+Functions pack_padded_sequence in rnn.py
+and nll_loss in function.py 
+were edited. 
+"""
+
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
@@ -12,14 +24,17 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torchtext.data import BucketIterator  # , Iterator
+from allennlp.modules.elmo import Elmo
+import torch.utils.data as data
+from torchtext.vocab import GloVe
 
 from data import load_data
-from dataset import FNNDataset, PadSortBatch
+from dataset import FNNDataset, PadSortBatch, SNLIDataset, PadSortBatchSNLI
 from models import HierarchicalAttentionNet
 # from SentenceAttentionRNN import SentenceAttentionRNN
 from utils import (create_directories, load_latest_checkpoint, plot_results,
                    print_dataset_sizes, print_flags, print_model_parameters,
-                   save_model, save_results)
+                   save_model, save_results, create_checkpoint)
 #from encoders import WordAttentionRNN
 
 # defaults
@@ -33,10 +48,12 @@ else:
 ROOT_DIR = Path.cwd().parent
 LEARNING_RATE = 0.05
 MAX_EPOCHS = 5
-BATCH_SIZE = 1
+BATCH_SIZE_FN = 10
+BATCH_SIZE_NLI = 100
 NUM_CLASSES_FN = 2
 
 WORD_EMBED_DIM = 300
+ELMO_EMBED_DIM = 1024
 WORD_HIDDEN_DIM = 100
 SENT_HIDDEN_DIM = 100
 
@@ -48,38 +65,58 @@ MODELS_DIR_DEFAULT = ROOT_DIR / 'output' / 'models'
 RESULTS_DIR_DEFAULT = ROOT_DIR / 'output' / 'results'
 DATA_PERCENTAGE_DEFAULT = 1.00
 
+ELMO_DIR = Path().cwd().parent / 'data' / 'elmo'
+ELMO_OPTIONS_FILE = ELMO_DIR / 'elmo_2x4096_512_2048cnn_2xhighway_5.5B_options.json'
+ELMO_WEIGHT_FILE = ELMO_DIR / 'elmo_2x4096_512_2048cnn_2xhighway_5.5B_weights.hdf5'
 
-def doc_to_sents(doc, text):
-    document, sent_tok, title_tok = [], [], []
-    sentence_terminals = ['.','!','?']
-    if len(doc.text[0]) > 1:
-        for word in doc.text[0]:
-            sent_tok.append(word)
-            if text.vocab.itos[word] in sentence_terminals:
-                if len(sent_tok) > 1:
-                    document.append(torch.tensor(sent_tok))
-                    sent_tok = []
-                else: 
-                    sent_tok = []
-        if not document:
-            document.append(torch.tensor(sent_tok))
-    if len(doc.title[0]) > 1:
-        for word in doc.title[0]:
-            title_tok.append(word)
-        document.append(torch.tensor(title_tok))
-    return document
 
-def print_doc(doc, text):
-    for word in doc:
-        print(text.vocab.itos[word], end=' ')
+def train_epoch_fn(train_iter, model, optimizer, loss_func):
+    model.train()
+    train_loss = 0.0
+    train_acc = []
+    for step, batch in enumerate(train_iter):
+        articles, article_dims, labels = batch
+        if step % 10 == 0:
+            print(f'Processed {step} FN batches')
+        optimizer.zero_grad()
+        out = model(batch=articles, batch_dims=article_dims, task='FN')
+        loss = loss_func(out, labels)
+        loss.backward()
+        optimizer.step()
+        train_loss += loss.item() * BATCH_SIZE_FN
+        if torch.cuda.is_available():
+            acc = (out.argmax(dim=1).cuda() == labels.cuda()).float().mean()
+        else:
+            acc = (out.argmax(dim=1) == labels).float().mean()
+        train_acc.append(acc)
+    return train_loss, train_acc
 
+def eval_epoch_fn(val_iter, model, loss_func):
+    model.eval() # turn on evaluation mode
+    val_acc = []
+    val_loss = 0.0
+    for step, batch in enumerate(val_iter):
+        articles, article_dims, labels = batch
+        out = model(batch=articles, batch_dims=article_dims, task='FN')
+        loss = loss_func(out, labels)
+        val_loss += loss.item() * BATCH_SIZE_FN
+        if torch.cuda.is_available():
+            acc = (out.argmax(dim=1).cuda() == labels.cuda()).float().mean()
+        else:
+            acc = (out.argmax(dim=1) == labels).float().mean()
+        val_acc.append(acc)
+    return val_loss, val_acc
+
+    
 def train():
     model_type = FLAGS.model_type
     data_dir = Path(FLAGS.data_dir)
     checkpoints_dir = Path(FLAGS.checkpoints_dir)
     models_dir = Path(FLAGS.models_dir)
     results_dir = Path(FLAGS.results_dir)
-    data_percentage = FLAGS.data_percentage
+    #data_percentage = FLAGS.data_percentage
+
+
     if model_type == 'STL':
         only_fn = True
     else:
@@ -91,54 +128,82 @@ def train():
     
     # create other directories if they do not exist
     create_directories(checkpoints_dir, models_dir, results_dir)
-
+    
     # load the data
     print('Loading the data...')
-    if only_fn:
-        FNN, TEXT, LABEL = load_data(data_dir, percentage=None, only_fn=only_fn)
-    else:
-        SNLI, FNN, TEXT, LABEL = load_data(data_dir, data_percentage, only_fn=only_fn)
-    embedding = nn.Embedding.from_pretrained(TEXT.vocab.vectors)
-    embedding.requires_grad = False
-    # embedding = embedding.to(DEVICE)
 
-    # print the dataset sizes
+    # get the glove and elmo embeddings
+    GloVe_vectors = GloVe()
+    print('Uploaded GloVe embeddings.')
+    ELMo = Elmo(
+            options_file=ELMO_OPTIONS_FILE, 
+            weight_file=ELMO_WEIGHT_FILE,
+            num_output_representations=1, 
+            requires_grad=False,
+            dropout=0).to(DEVICE)
+    print('Uploaded Elmo embeddings.')
+    # get the fnn and snli data
+    FNN = {}
+    FNN_DL = {}
+
+    for path in ['train', 'val', 'test']:
+        FNN[path] = FNNDataset(data_dir / ('FNN_' + path + '.pkl'), 
+           GloVe_vectors, ELMo)
+        FNN_DL[path] = data.DataLoader(
+                dataset=FNN[path],
+                batch_size=BATCH_SIZE_FN,
+                num_workers=0,
+                shuffle=True,
+                drop_last=True,
+                collate_fn=PadSortBatch())
+    print('Uploaded FNN data.')
     if not only_fn:
-        print_dataset_sizes(SNLI, data_percentage, 'SNLI')
-    print_dataset_sizes(FNN, data_percentage, 'FakeNewsNet')
+        SNLI = {}
+        SNLI_DL = {}
+        for path in ['train', 'val', 'test']:
+            SNLI[path] = SNLIDataset(data_dir / ('SNLI_' + path + '.pkl'), 
+               GloVe_vectors, ELMo)
+            SNLI_DL[path] = data.DataLoader(
+                    dataset=SNLI[path],
+                    batch_size=BATCH_SIZE_NLI,
+                    num_workers=0,
+                    shuffle=True,
+                    drop_last=True,
+                    collate_fn=PadSortBatchSNLI())
+            print('Uploaded SNLI data.')
 
     # initialize the model, according to the model type
     print('Initializing the model...', end=' ')
-    # TODO: Initialize the model properly
     if model_type == 'MTL':
-        # model = ... 
-        print("Nothing for now.")
+        NUM_CLASSES_NLI = 3
+        print("Loading an MTL HAN model.")
     elif model_type == 'STL':
-        # model = ...
+        NUM_CLASSES_NLI = None
         print("Loading an STL HAN model.")
-        model = HierarchicalAttentionNet(word_input_dim=WORD_EMBED_DIM, 
-                                 word_hidden_dim=WORD_HIDDEN_DIM, 
-                                 sent_hidden_dim=SENT_HIDDEN_DIM, 
-                                 batch_size=BATCH_SIZE, 
-                                 num_classes=NUM_CLASSES_FN, 
-                                 embedding=embedding)
     elif model_type == 'Transfer':
-        # model = ...
         print("Nothing for now.")
-
-    model.to(DEVICE)
+    if ELMO_EMBED_DIM is not None:
+        input_dim = WORD_EMBED_DIM + ELMO_EMBED_DIM 
+    else:
+        input_dim = WORD_EMBED_DIM
+    model = HierarchicalAttentionNet(input_dim=input_dim , 
+                                     hidden_dim=WORD_HIDDEN_DIM, 
+                                     num_classes_task_fn=NUM_CLASSES_FN, 
+                                     embedding=None, 
+                                     num_classes_task_nli=NUM_CLASSES_NLI, 
+                                     dropout=0).to(DEVICE)
+    print('Working on: ', end='')
     print(DEVICE)
     print('Done!')
     print_model_parameters(model)
     print()
 
     # set the criterion and optimizer
-    # TODO: Do we need a custom loss function for our model(s)?
-    loss_func = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(
-        params=model.parameters(),
-        lr=LEARNING_RATE
-    )
+    if only_fn:
+        loss_func = nn.CrossEntropyLoss()
+        optimizer = optim.Adam(
+                params=model.parameters(),
+                lr=LEARNING_RATE)
     
     # load the last checkpoint (if it exists)
     epoch, results, best_accuracy = load_latest_checkpoint(checkpoints_dir, model, optimizer)
@@ -151,63 +216,32 @@ def train():
     for i in range(epoch, MAX_EPOCHS):
         print(f'Epoch {i+1:0{len(str(MAX_EPOCHS))}}/{MAX_EPOCHS}:')
 
-        train_i, val_i, test_i = BucketIterator.splits(
-                datasets=(FNN['train'], FNN['val'], FNN['test']),
-                batch_sizes=(BATCH_SIZE,BATCH_SIZE,BATCH_SIZE),
-                device=DEVICE,
-                sort_key=lambda x: len(x.text[0]), # the BucketIterator needs to be told what function it should use to group the data.
-                #sort_within_batch=False,
-                shuffle=True)
-        model.train()
-        train_loss = 0.0
-        train_acc = []
-        val_loss = 0.0
-        val_acc = []
-        batchn = 0
-        fails = 0
-        failed = []
-        for one_doc in train_i:
-            if batchn % 10 == 0:
-                print(f'Processed {batchn} batches')
-            batchn += 1
-            optimizer.zero_grad()
-            model._init_hidden_state()
-            document = doc_to_sents(one_doc, TEXT)
-            #try:
-            preds = model(document)
-            #except:
-            #    print("couldn't process!")
-            #    failed.append(one_doc)
-            #    fails += 1
-            #    continue
-            loss = loss_func(preds, one_doc.label)
-            loss.backward()
-            optimizer.step()
-            train_loss += loss.item() * BATCH_SIZE
-            acc = (one_doc.label == preds.argmax(dim=1)).float()
-            train_acc.append(acc)
-            if batchn % 200 == 0:
-                break
-        model.eval() # turn on evaluation mode
-        val_loss = 0.0
-        valn = 0
-        for one_doc in val_i:
-            #print_doc(one_doc.text[0],TEXT)
-            #print()
-            valn += 1
-            document = doc_to_sents(one_doc, TEXT)
-            preds = model(document)
-            loss = loss_func(preds, one_doc.label)
-            val_loss += loss.item() * BATCH_SIZE
-            acc = (one_doc.label == preds.argmax(dim=1)).float()
-            val_acc.append(acc)
-            valn += 1
+        # one epoch of training
+        if only_fn:           
+            train_loss, train_acc = train_epoch_fn(FNN_DL['train'], model, 
+                                                   optimizer, loss_func)
+        elif model_type == 'MTL':
+            print()
+            #train_loss, train_acc = train_epoch_fn(train_i, train_i_snli, model, optimizer, loss_func, TEXT)
+        
+        # one epoch of eval
+        if only_fn:
+            val_loss, val_acc = eval_epoch_fn(FNN_DL['val'], model, 
+                                              loss_func)
+        elif model_type == 'MTL':
+            print()
+            #val_loss, val_acc = eval_epoch_fn(val_i, model, loss_func, TEXT)
+        
         results['epoch'].append(i)
         results['train_loss'].append(train_loss / len(FNN["train"]))        
         results['train_accuracy'].append(torch.tensor(train_acc).mean().item())
         results['val_loss'].append(val_loss / len(FNN["val"]))
         results['val_accuracy'].append(torch.tensor(val_acc).mean().item())
         print(results)
+        
+        best_accuracy = torch.tensor(val_acc).max().item()
+        create_checkpoint(checkpoints_dir, epoch, model, optimizer, results, best_accuracy)
+
         
     # save and plot the results
     save_results(results_dir, results, model)

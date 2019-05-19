@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.utils.rnn import pack_padded_sequence as Pack
 from torch.nn.utils.rnn import pad_packed_sequence as Pad
+#from utils import hotfix_pack_padded_sequence as Pad
 
 
 class EmbedAttention(nn.Module):
@@ -83,7 +84,7 @@ class SentAttentionRNN(nn.Module):
 
             # unpack the article (batch)
             article_encoded, article_encoded_lens = Pad(article_encoded_packed, batch_first=True)
-
+            article_encoded, article_encoded_lens = article_encoded.cuda(), article_encoded_lens.cuda()
             # print(f'encoded article shape: {article_encoded.shape}')
 
             # compute the attention
@@ -141,7 +142,7 @@ class DocAttentionRNN(nn.Module):
 
         # unpack the batch
         batch_encoded, batch_encoded_lens = Pad(batch_encoded_packed, batch_first=True)
-
+        batch_encoded, batch_encoded_lens = batch_encoded.cuda(), batch_encoded_lens.cuda()
 
         # compute the attention
         hidden_embed = torch.tanh(self.linear(batch_encoded))

@@ -7,7 +7,7 @@ import torch
 import torch.utils.data as data
 from torchtext.vocab import GloVe
 
-from dataset import FNNDataset, PadSortBatch
+from dataset import FNNDataset, SNLIDataset, PadSortBatch
 from models import HierarchicalAttentionNet
 
 ELMO_DIR = Path().cwd().parent / 'data' / 'elmo'
@@ -21,7 +21,7 @@ else:
     DEVICE = torch.device('cpu')
 
 FNN_path = Path().cwd().parent / 'data' / 'FNN.pkl'
-
+SNLI_path = Path().cwd().parent / 'data' / 'SNLI_val.pkl'
 # load the GloVe vectors
 GloVe_vectors = GloVe()
 
@@ -37,30 +37,69 @@ ELMo = Elmo(
 # load the FNN dataset
 FNN = FNNDataset(FNN_path, GloVe_vectors, ELMo)
 
-# initialize the model
-model = HierarchicalAttentionNet(
-        input_dim=300+1024,
-        hidden_dim=100,
-        num_classes=2,
-        embedding=None
-).to(DEVICE)
-
 FNN_DL = data.DataLoader(
     dataset=FNN,
-    batch_size=3,
-    num_workers=1,
+    batch_size=5,
+    num_workers=0,
     shuffle=True,
     drop_last=True,
     collate_fn=PadSortBatch()
 )
+from dataset import FNNDataset, SNLIDataset, PadSortBatch, PadSortBatchSNLI 
+SNLI = SNLIDataset(SNLI_path, GloVe_vectors, ELMo)
 
-for step, batch in enumerate(FNN_DL):
-    articles, article_dims, labels = batch
-    print(articles.shape)
-    
-    out = model(articles, article_dims)
+SNLI_DL = data.DataLoader(
+    dataset=SNLI,
+    batch_size=5,
+    num_workers=0,
+    shuffle=True,
+    drop_last=True,
+    collate_fn=PadSortBatchSNLI()
+)
+
+# initialize the model
+model = HierarchicalAttentionNet(
+        input_dim=300+1024,
+        hidden_dim=100,
+        num_classes_task_fn=2,
+        num_classes_task_nli=3,
+        embedding=None
+).to(DEVICE)
+
+for step, batch in enumerate(SNLI_DL):
+    premises, hypotheses, pre_dims, hyp_dims, labels = batch
+    out = model(batch=premises, batch_dims=pre_dims, task='NLI',
+                batch_hyp=hypotheses, batch_hyp_dims=hyp_dims)
     
     print(f'accuracy: {(out.argmax(dim=1) == labels).float().mean()}')
     
     if step == 10:
+        break
+    
+    
+for step, batch in enumerate(FNN_DL):
+    articles, article_dims, labels = batch
+    print(articles.shape)
+    
+    out = model(batch=articles, batch_dims=article_dims, task='FN')
+    
+    print(f'accuracy: {(out.argmax(dim=1) == labels).float().mean()}')
+    
+    if step == 10:
+        break
+
+
+
+# create an iterator object from that iterable
+iter_obj = iter(enumerate(FNN_DL))
+n = 0
+# infinite loop
+while True:
+    try:
+        # get the next item
+        next(iter_obj)
+        n += 1
+        # do something with element
+    except StopIteration:
+        # if StopIteration is raised, break from loop
         break
