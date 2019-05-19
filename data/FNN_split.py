@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import csv
 from pathlib import Path
 
-from pandas import read_csv
+import pandas as pd
 from sklearn.model_selection import train_test_split
+import pickle as pkl
 
 DATA_DIR = Path.cwd().parent / 'data'
-FNN_path = DATA_DIR / 'FNN_clipped.csv'
+FNN_path = DATA_DIR / 'FNN.pkl'
 
 
 def create_splits(df, ratio):
@@ -19,13 +19,17 @@ def create_splits(df, ratio):
     return train, test, val
 
 
-# read the DF
-df = read_csv(FNN_path, sep=';', encoding='utf-8', quoting=csv.QUOTE_NONNUMERIC)
+# read the pickle and create DF
+with open(FNN_path, 'rb') as f:
+    x = pkl.load(f)
+df = pd.DataFrame.from_dict(x)
 
 # create the splits
-train, test, val = create_splits(df, ratio=0.1)
+train, test, val = create_splits(df, ratio=0.1)    
+train, test, val = train.to_dict('list'), test.to_dict('list'), val.to_dict('list') #convert them back to dict
 
-# save the splits
-train.to_csv(DATA_DIR / 'train.csv', sep=';', encoding='utf-8', quoting=csv.QUOTE_NONNUMERIC, index=False)
-test.to_csv(DATA_DIR / 'test.csv', sep=';', encoding='utf-8', quoting=csv.QUOTE_NONNUMERIC, index=False)
-val.to_csv(DATA_DIR / 'val.csv', sep=';', encoding='utf-8', quoting=csv.QUOTE_NONNUMERIC, index=False)
+#pickle the split
+pkl.dump(train, open(DATA_DIR / 'FNN_train.pkl', 'wb'))
+pkl.dump(test, open(DATA_DIR / 'FNN_test.pkl', 'wb'))
+pkl.dump(val, open(DATA_DIR / 'FNN_val.pkl', 'wb')) 
+

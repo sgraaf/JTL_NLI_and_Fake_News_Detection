@@ -75,8 +75,13 @@ ILLEGAL_PATTERNS = {
 MAX_DOC_LEN = 100
 MAX_SENT_LEN = 40
 
-FNN_DIR = Path(__file__).resolve().parent.parent / 'fakenewsnet_dataset'
-DATA_DIR = Path(__file__).resolve().parent
+try:
+    FNN_DIR = Path(__file__).resolve().parent.parent / 'fakenewsnet_dataset'
+    DATA_DIR = Path(__file__).resolve().parent
+except:
+    FNN_DIR = Path.cwd().parent / 'fakenewsnet_dataset'
+    DATA_DIR = Path.cwd()
+
 JSON_FILES = sorted(FNN_DIR.rglob('*.json'))
 
 news_content = {
@@ -108,7 +113,7 @@ for json_file in JSON_FILES:
                 article_sentences = tokenize.sent_tokenize(title) + tokenize.sent_tokenize(text)
 
                 if len(article_sentences) <= MAX_DOC_LEN:  # No articles with more than 100 sentences
-                    article_sentences_words = [tokenize.word_tokenize(sentence) for sentence in article_sentences if len(tokenize.word_tokenize(sentence)) <= MAX_SENT_LEN]
+                    article_sentences_words = [tokenize.word_tokenize(sentence.lower()) for sentence in article_sentences if len(tokenize.word_tokenize(sentence)) <= MAX_SENT_LEN]
 
                     # append the article and label
                     dataset['articles'].append(article_sentences_words)
@@ -116,4 +121,5 @@ for json_file in JSON_FILES:
 
 # pickle the dataset
 dataset_path = DATA_DIR / 'FNN.pkl'
+
 pkl.dump(dataset, open(dataset_path, 'wb'))
