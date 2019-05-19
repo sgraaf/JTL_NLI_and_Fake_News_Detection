@@ -41,7 +41,6 @@ class SentAttentionRNN(nn.Module):
         super(SentAttentionRNN, self).__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
-
         # initialize the GRU cell
         self.LSTM_cell = nn.LSTM(
             input_size=self.input_dim,
