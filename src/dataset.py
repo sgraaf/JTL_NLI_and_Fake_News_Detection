@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import json
 import pickle as pkl
 
 from allennlp.modules.elmo import batch_to_ids
@@ -45,6 +46,74 @@ class FNNDataset(data.Dataset):
     def load_data(file_path):
         dataset = pkl.load(open(file_path, 'rb'))
         return dataset['articles'], dataset['labels']
+
+    @property
+    def size(self):
+        return len(self.labels)
+    
+
+class SNLIDataset(data.Dataset):
+
+    def __init__(self, file_path, GloVe_vectors, ELMo):
+        super(FNNDataset, self).__init__()
+        self.GloVe = GloVe_vectors
+        self.ELMo = ELMo
+        self.premises, self.hypotheses, self.labels = self.load_data(file_path)
+
+    def __getitem__(self, idx):
+        premise = self.premises[idx]
+        hypothesis = self.hypotheses[idx]
+        label = self.labels[idx]
+        
+        # premise embedding
+        # get the GloVe embeddings
+        GloVe_embed = torch.stack([self.GloVe[word] if word in self.GloVe.stoi else self.GloVe[word.lower()] for word in premise])        
+        # get the ELMo embeddings
+        ELMo_character_ids = batch_to_ids(premise)
+        ELMo_embed = self.ELMo(ELMo_character_ids)['elmo_representations'][0]      
+        # concat the GloVe and ELMo embeddings
+        premise_embed = torch.cat([GloVe_embed, ELMo_embed], dim=2)
+        
+        # hypothesis embedding
+        # get the GloVe embeddings
+        GloVe_embed = torch.stack([self.GloVe[word] if word in self.GloVe.stoi else self.GloVe[word.lower()] for word in hypothesis])        
+        # get the ELMo embeddings
+        ELMo_character_ids = batch_to_ids(hypothesis)
+        ELMo_embed = self.ELMo(ELMo_character_ids)['elmo_representations'][0]      
+        # concat the GloVe and ELMo embeddings
+        hypothesis_embed = torch.cat([GloVe_embed, ELMo_embed], dim=2)
+        
+        return premise_embed, len(premise), hypothesis_embed, len(hypothesis), label
+    
+    def __len__(self):
+        return len(self.labels)
+
+    @staticmethod
+    def load_data(file_path):
+        labels_dict = {
+            'neutral': 0,
+            'contradiction': 1,
+            'entailment': 2
+        }
+        
+        premises = []
+        hypotheses = []
+        labels = []
+        
+        with open(file_path, 'r', encoding='utf-8') as f:
+            for line in f.readlines():
+                json_ = json.loads(line)
+                
+                if json_['gold_label'] != '-':
+                    labels.append(labels_dict[json_['gold_label']])
+                else:
+                    labels.append(labels_dict[json_['annotator_labels'][0]])
+
+                premises.append(json_['sentence1'])
+                hypotheses.append(json_['sentence2'])
+                
+                
+        return premises, hypotheses, labels
 
     @property
     def size(self):
