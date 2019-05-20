@@ -3,6 +3,7 @@
 
 from os.path import getctime
 from pathlib import Path
+import pickle as pkl
 
 import matplotlib.pyplot as plt
 import torch
@@ -69,6 +70,15 @@ def print_dataset_sizes(dataset, data_percentage, name):
     print(f'Dev:   {len(dataset["val"]):<{longest_set_size}} samples')
     print(f'Test:  {len(dataset["test"]):<{longest_set_size}} samples')
     print()
+
+def get_number_sentences(data_dir):
+    with open(data_dir, 'rb') as f:
+        x = pkl.load(f)
+    num_sentences_fnn = []
+    for i in x['articles']: 
+        num_sentences_fnn.append(len(i))
+    num_sentences_fnn = sum(num_sentences_fnn)
+    return num_sentences_fnn
 
 
 def matrix_matmul(seq, weight, bias=None):
