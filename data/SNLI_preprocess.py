@@ -46,8 +46,8 @@ for json_file in JSON_FILES:
         for line in jf:
             n += 1
             #print(line)
-            sentence1 = [tokenize.word_tokenize(line["sentence1"].strip().lower())]
-            sentence2 = [tokenize.word_tokenize(line["sentence2"].strip().lower())]
+            premise = [tokenize.word_tokenize(line["sentence1"].strip().lower())]
+            hypothesis = [tokenize.word_tokenize(line["sentence2"].strip().lower())]
             if line["gold_label"] == 'contradiction':
                 label = 0
             elif line["gold_label"] == 'neutral':
@@ -59,8 +59,8 @@ for json_file in JSON_FILES:
                 continue
             #print(line)
             if len(sentence1[0]) <= MAX_SENT_LEN and len(sentence2[0]) <= MAX_SENT_LEN:
-                final_snli[splits[iter]]['sentence1'].append(sentence1)
-                final_snli[splits[iter]]['sentence2'].append(sentence2)
+                final_snli[splits[iter]]['premise'].append(sentence1)
+                final_snli[splits[iter]]['hypothesis'].append(sentence2)
                 final_snli[splits[iter]]['label'].append(label)
     #final_snli[splits[iter]] = temp_dataset.copy()
     iter += 1 

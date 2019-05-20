@@ -7,7 +7,7 @@ import torch
 import torch.utils.data as data
 from torchtext.vocab import GloVe
 
-from dataset import FNNDataset, SNLIDataset, PadSortBatch
+from dataset import FNNDataset, SNLIDataset, PadSortBatchFNN, PadSortBatchSNLI 
 from models import HierarchicalAttentionNet
 
 ELMO_DIR = Path().cwd().parent / 'data' / 'elmo'
@@ -20,8 +20,9 @@ if torch.cuda.is_available():
 else:
     DEVICE = torch.device('cpu')
 
-FNN_path = Path().cwd().parent / 'data' / 'FNN.pkl'
+FNN_path = Path().cwd().parent / 'data' / 'FNN_val.pkl'
 SNLI_path = Path().cwd().parent / 'data' / 'SNLI_val.pkl'
+
 # load the GloVe vectors
 GloVe_vectors = GloVe()
 
@@ -43,9 +44,10 @@ FNN_DL = data.DataLoader(
     num_workers=0,
     shuffle=True,
     drop_last=True,
-    collate_fn=PadSortBatch()
+    collate_fn=PadSortBatchFNN()
 )
-from dataset import FNNDataset, SNLIDataset, PadSortBatch, PadSortBatchSNLI 
+
+# load the SNLI dataset
 SNLI = SNLIDataset(SNLI_path, GloVe_vectors, ELMo)
 
 SNLI_DL = data.DataLoader(
@@ -67,7 +69,9 @@ model = HierarchicalAttentionNet(
 ).to(DEVICE)
 
 for step, batch in enumerate(SNLI_DL):
-    premises, hypotheses, pre_dims, hyp_dims, labels = batch
+    premises, pre_dims, hypotheses, hyp_dims, labels = batch
+    print(premises.shape)
+    print(len(pre_dims))
     out = model(batch=premises, batch_dims=pre_dims, task='NLI',
                 batch_hyp=hypotheses, batch_hyp_dims=hyp_dims)
     
