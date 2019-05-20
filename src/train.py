@@ -34,7 +34,7 @@ from models import HierarchicalAttentionNet
 # from SentenceAttentionRNN import SentenceAttentionRNN
 from utils import (create_directories, load_latest_checkpoint, plot_results,
                    print_dataset_sizes, print_flags, print_model_parameters,
-                   save_model, save_results, create_checkpoint)
+                   save_model, save_results, create_checkpoint, get_number_sentences)
 #from encoders import WordAttentionRNN
 
 # defaults
@@ -70,8 +70,30 @@ ELMO_OPTIONS_FILE = ELMO_DIR / 'elmo_2x4096_512_2048cnn_2xhighway_5.5B_options.j
 ELMO_WEIGHT_FILE = ELMO_DIR / 'elmo_2x4096_512_2048cnn_2xhighway_5.5B_weights.hdf5'
 
 
+def train_batch_fn(batch, model, optimizer, loss_func_fn):
+    articles, article_dims, labels = batch
+    optimizer.zero_grad()
+    out = model(batch=articles, batch_dims=article_dims, task='FN')
+    loss = loss_func_fn(out, labels)
+    loss.backward()
+    optimizer.step()
+    batch_loss = loss.item() * BATCH_SIZE_FN
+    batch_acc = (out.argmax(dim=1).to(DEVICE) == labels.to(DEVICE)).float().mean() 
+    return batch_loss, batch_acc
+
+def train_batch_nli(batch, model, optimizer, loss_func_fn):
+    premises, hypotheses, pre_dims, hyp_dims, labels = batch
+    optimizer.zero_grad()
+    out = model(batch=premises, batch_dims=pre_dims, task='NLI',
+                batch_hyp=hypotheses, batch_hyp_dims=hyp_dims)
+    loss = loss_func_fn(out, labels)
+    loss.backward()
+    optimizer.step()
+    batch_loss = loss.item() * BATCH_SIZE_NLI
+    batch_acc = (out.argmax(dim=1).to(DEVICE) == labels.to(DEVICE)).float().mean() 
+    return batch_loss, batch_acc
+    
 def train_epoch_fn(train_iter, model, optimizer, loss_func):
-    model.train()
     train_loss = 0.0
     train_acc = []
     for step, batch in enumerate(train_iter):
@@ -84,15 +106,11 @@ def train_epoch_fn(train_iter, model, optimizer, loss_func):
         loss.backward()
         optimizer.step()
         train_loss += loss.item() * BATCH_SIZE_FN
-        if torch.cuda.is_available():
-            acc = (out.argmax(dim=1).cuda() == labels.cuda()).float().mean()
-        else:
-            acc = (out.argmax(dim=1) == labels).float().mean()
+        acc = (out.argmax(dim=1).to(DEVICE) == labels.to(DEVICE)).float().mean()
         train_acc.append(acc)
     return train_loss, train_acc
 
 def eval_epoch_fn(val_iter, model, loss_func):
-    model.eval() # turn on evaluation mode
     val_acc = []
     val_loss = 0.0
     for step, batch in enumerate(val_iter):
@@ -100,13 +118,23 @@ def eval_epoch_fn(val_iter, model, loss_func):
         out = model(batch=articles, batch_dims=article_dims, task='FN')
         loss = loss_func(out, labels)
         val_loss += loss.item() * BATCH_SIZE_FN
-        if torch.cuda.is_available():
-            acc = (out.argmax(dim=1).cuda() == labels.cuda()).float().mean()
-        else:
-            acc = (out.argmax(dim=1) == labels).float().mean()
+        acc = (out.argmax(dim=1).to(DEVICE) == labels.to(DEVICE)).float().mean()
         val_acc.append(acc)
     return val_loss, val_acc
 
+def eval_epoch_nli(val_iter, model, loss_func):
+    model.eval() # turn on evaluation mode
+    val_acc = []
+    val_loss = 0.0
+    for step, batch in enumerate(val_iter):
+        premises, hypotheses, pre_dims, hyp_dims, labels = batch
+        out = model(batch=premises, batch_dims=pre_dims, task='NLI',
+                batch_hyp=hypotheses, batch_hyp_dims=hyp_dims)
+        loss = loss_func(out, labels)
+        val_loss += loss.item() * BATCH_SIZE_FN
+        acc = (out.argmax(dim=1).to(DEVICE) == labels.to(DEVICE)).float().mean()
+        val_acc.append(acc)
+    return val_loss, val_acc
     
 def train():
     model_type = FLAGS.model_type
@@ -171,7 +199,8 @@ def train():
                     drop_last=True,
                     collate_fn=PadSortBatchSNLI())
             print('Uploaded SNLI data.')
-
+    fnn_train_len = get_number_sentences(data_dir / 'FNN_train.pkl')
+    snli_train_len = len(SNLI['train']) * 2
     # initialize the model, according to the model type
     print('Initializing the model...', end=' ')
     if model_type == 'MTL':
@@ -207,7 +236,9 @@ def train():
     
     # load the last checkpoint (if it exists)
     epoch, results, best_accuracy = load_latest_checkpoint(checkpoints_dir, model, optimizer)
-    results = {'epoch':[], 'train_loss':[], 'train_accuracy':[], 'val_loss': [], 'val_accuracy': []}
+    results_fn = {'epoch':[], 'train_loss':[], 'train_accuracy':[], 'val_loss': [], 'val_accuracy': []}
+    results_nli = {'epoch':[], 'train_loss':[], 'train_accuracy':[], 'val_loss': [], 'val_accuracy': []}
+    results = {'fn': results_fn, 'nli': results_nli}
     if epoch == 0:
         print(f'Starting training at epoch {epoch + 1}...')
     else:
@@ -215,34 +246,64 @@ def train():
 
     for i in range(epoch, MAX_EPOCHS):
         print(f'Epoch {i+1:0{len(str(MAX_EPOCHS))}}/{MAX_EPOCHS}:')
-
+        model.train()
         # one epoch of training
-        if only_fn:           
-            train_loss, train_acc = train_epoch_fn(FNN_DL['train'], model, 
+        if only_fn:
+            train_loss_fn, train_acc_fn = train_epoch_fn(FNN_DL['train'], model, 
                                                    optimizer, loss_func)
         elif model_type == 'MTL':
-            print()
+            model.train()
+            train_loss_fn = 0.0
+            train_acc_fn = []
+            train_loss_nli = 0.0
+            train_acc_nli = []
+            #TODO: define the batch through next(iter)
+            #TODO: differentiate between two losses
+            
+            
+            chance_fn = len()
+            chance_nli = 0
+            if np.random(0,10) < chance_fn:
+                temp_loss_fn, temp_acc_fn = train_batch_fn(batch, model, optimizer, loss_func_fn)
+                train_loss_fn += temp_loss_fn
+                train_acc_fn.append(temp_acc_fn)
+            else:
+                temp_loss_nli, temp_acc_nli = train_batch_nli(batch, model, optimizer, loss_func_nli)
+                train_acc_nli.append(temp_acc_nli)
+                train_loss_nli += temp_loss_nli
+            
             #train_loss, train_acc = train_epoch_fn(train_i, train_i_snli, model, optimizer, loss_func, TEXT)
         
         # one epoch of eval
-        if only_fn:
-            val_loss, val_acc = eval_epoch_fn(FNN_DL['val'], model, 
+        model.eval()
+        val_loss_fn, val_acc_fn = eval_epoch_fn(FNN_DL['val'], model, 
                                               loss_func)
-        elif model_type == 'MTL':
-            print()
-            #val_loss, val_acc = eval_epoch_fn(val_i, model, loss_func, TEXT)
+        if model_type == 'MTL':
+            val_loss_nli, val_acc_nli = eval_epoch_nli(SNLI_DL['val'], model, 
+                                              loss_func)
+            
+        for task in ['fn','nli']:
+            results[task]['epoch'].append(i)
+            if task == 'fn':
+                temp_train_loss = train_loss_fn / len(FNN['train'])
+                temp_val_loss = val_loss_fn / len(FNN['val'])
+                temp_train_acc = train_acc_fn
+                temp_val_acc = val_acc_fn
+            elif task == 'nli':
+                temp_train_loss = train_loss_nli / len(SNLI['train'])
+                temp_val_loss = val_loss_nli / len(SNLI['val'])
+                temp_train_acc = train_acc_nli
+                temp_val_acc = val_acc_nli
+                
+            results[task]['train_loss'].append(temp_train_loss)        
+            results[task]['train_accuracy'].append(torch.tensor(temp_train_acc).mean().item())
+            results[task]['val_loss'].append(temp_val_loss)
+            results[task]['val_accuracy'].append(torch.tensor(temp_val_acc).mean().item())
+            print(results)
         
-        results['epoch'].append(i)
-        results['train_loss'].append(train_loss / len(FNN["train"]))        
-        results['train_accuracy'].append(torch.tensor(train_acc).mean().item())
-        results['val_loss'].append(val_loss / len(FNN["val"]))
-        results['val_accuracy'].append(torch.tensor(val_acc).mean().item())
-        print(results)
-        
-        best_accuracy = torch.tensor(val_acc).max().item()
+        best_accuracy = torch.tensor(temp_val_acc).max().item()
         create_checkpoint(checkpoints_dir, epoch, model, optimizer, results, best_accuracy)
 
-        
     # save and plot the results
     save_results(results_dir, results, model)
     plot_results(results_dir, results, model)
