@@ -1485,6 +1485,7 @@ def embedding(input, weight, padding_idx=None, max_norm=None, norm_type=2.,
                  [ 0.0000,  0.0000,  0.0000],
                  [ 0.6262,  0.2438,  0.7471]]])
     """
+
     if padding_idx is not None:
         if padding_idx > 0:
             assert padding_idx < weight.size(0), 'Padding_idx must be within num_embeddings'
