@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import json
 import pickle as pkl
 
 from allennlp.modules.elmo import batch_to_ids
@@ -54,6 +55,7 @@ class FNNDataset(data.Dataset):
     @property
     def size(self):
         return len(self.labels)
+    
 
 class SNLIDataset(data.Dataset):
 
@@ -61,39 +63,28 @@ class SNLIDataset(data.Dataset):
         super(SNLIDataset, self).__init__()
         self.GloVe = GloVe_vectors
         self.ELMo = ELMo
-        self.premise, self.hypothesis, self.labels = self.load_data(file_path)
+        self.premises, self.hypotheses, self.labels = self.load_data(file_path)
 
     def __getitem__(self, idx):
-        premise = self.premise[idx]
-        #print(premise)
-        hypothesis = self.hypothesis[idx]
-        #print(hypothesis)
+        premise = self.premises[idx]
+        hypothesis = self.hypotheses[idx]
         label = self.labels[idx]
         
-        premise_lens = [len(sentence) for sentence in premise]
-        hypothesis_lens = [len(sentence) for sentence in hypothesis]
-        #MAX_SENT_LEN = max([max(premise_lens), max(hypothesis_lens)])
-        
         # get the GloVe embeddings
-        premise_GloVe_embed = torch.stack([torch.stack([self.GloVe[word] if word in self.GloVe.stoi else self.GloVe[word.lower()] for word in sent]) for sent in premise])
-        hypothesis_GloVe_embed = torch.stack([torch.stack([self.GloVe[word] if word in self.GloVe.stoi else self.GloVe[word.lower()] for word in sent]) for sent in hypothesis])
-        
-        
-        # print(GloVe_embeddings.shape)
+        premise_GloVe_embed = torch.stack([self.GloVe[word] if word in self.GloVe.stoi else self.GloVe[word.lower()] for word in premise])
+        hypothesis_GloVe_embed = torch.stack([self.GloVe[word] if word in self.GloVe.stoi else self.GloVe[word.lower()] for word in hypothesis])
         
         # get the ELMo embeddings
         premise_ELMo_character_ids = batch_to_ids(premise).to(DEVICE)
         premise_ELMo_embed = self.ELMo(premise_ELMo_character_ids)['elmo_representations'][0]
-
         hypothesis_ELMo_character_ids = batch_to_ids(hypothesis)
         hypothesis_ELMo_embed = self.ELMo(hypothesis_ELMo_character_ids)['elmo_representations'][0]
-        # print(ELMo_embeddings.shape)
         
         # concat the GloVe and ELMo embeddings
         premise_embed = torch.cat([premise_GloVe_embed, premise_ELMo_embed], dim=2)
         hypothesis_embed = torch.cat([hypothesis_GloVe_embed, hypothesis_ELMo_embed], dim=2)
         
-        return premise_embed, hypothesis_embed, premise_lens, hypothesis_lens, label
+        return premise_embed, len(premise), hypothesis_embed, len(hypothesis), label
     
     def __len__(self):
         return len(self.labels)
@@ -101,13 +92,14 @@ class SNLIDataset(data.Dataset):
     @staticmethod
     def load_data(file_path):
         dataset = pkl.load(open(file_path, 'rb'))
-        return dataset['sentence1'], dataset['sentence2'], dataset['label']
+        return dataset['premise'], dataset['hypothesis'], dataset['label']
 
     @property
     def size(self):
         return len(self.labels)
-    
-class PadSortBatch(object):
+
+
+class PadSortBatchFNN(object):
     def __call__(self, batch):
 		# sort the batch
         batch_sorted_sent = sorted(batch, key=lambda x: x[0].shape[1], reverse=True)
@@ -127,6 +119,7 @@ class PadSortBatch(object):
         
         return articles_tensor, article_dims_sorted, labels_tensor
 
+
 class PadSortBatchSNLI(object):
     def __call__(self, batch):
 		# sort the batch
@@ -135,10 +128,11 @@ class PadSortBatchSNLI(object):
         # unpack the batch
         premise_sorted, hypothesis_sorted, premise_dims_sorted, hypothesis_dims_sorted, labels_sorted = map(list, zip(*batch_sorted_premise))       
 
-        # pad the articles with zeroes
-        max_sent_len = max([article.shape[1] for article in premise_sorted])
-        premise_padded = [F.pad(article, (0, 0, 0, max_sent_len - article.shape[1], 0, 0)) for article in premise_sorted]
-        hypothesis_padded = [F.pad(article, (0, 0, 0, max_sent_len - article.shape[1], 0, 0)) for article in hypothesis_sorted]
+        # pad the premise and hypothesis with zeroes
+        max_premise_len = max([premise.shape[1] for premise in premise_sorted])
+        premise_padded = [F.pad(premise, (0, 0, 0, max_premise_len - premise.shape[1], 0, 0)) for premise in premise_sorted]
+        max_hypothesis_len = max([hypothesis.shape[1] for hypothesis in hypothesis_sorted])
+        hypothesis_padded = [F.pad(hypothesis, (0, 0, 0, max_hypothesis_len - hypothesis.shape[1], 0, 0)) for hypothesis in hypothesis_sorted]
 
         # convert articles and labels to tensors
         premise_tensor = torch.stack(premise_padded)
@@ -146,4 +140,4 @@ class PadSortBatchSNLI(object):
         
         labels_tensor = torch.LongTensor(labels_sorted)
         
-        return premise_tensor, hypothesis_tensor, premise_dims_sorted, hypothesis_dims_sorted, labels_tensor 
+        return premise_tensor, premise_dims_sorted, hypothesis_tensor, hypothesis_dims_sorted, labels_tensor 
