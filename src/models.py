@@ -36,15 +36,17 @@ class HierarchicalAttentionNet(nn.Module):
         # apply dropout to the batch
         batch_dropout = F.dropout(batch, p=self.dropout, training=self.training)
 
-        # get the sentence embeddings
-        sent_embeds = self.sent_attend(batch_dropout, batch_dims)
         if task == 'FN':
+            # get the sentence embeddings
+            sent_embeds = self.sent_attend(batch_dropout, batch_dims, task='FN')
             # get the document embeddings
             doc_embeds = self.doc_attend(sent_embeds, batch_dims)
         
             # get the classification
             out = self.fnn_classifier(doc_embeds)
         elif task == 'NLI':
+            # get the sentence embeddings
+            sent_embeds = self.sent_attend(batch_dropout, batch_dims, task='NLI')
             
             # squeeze the premises
             sent_embeds = torch.squeeze(sent_embeds)
