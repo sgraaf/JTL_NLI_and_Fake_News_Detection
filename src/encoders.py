@@ -64,7 +64,6 @@ class SentAttentionRNN(nn.Module):
         # print(f'doc lens: {doc_lens}')
         # print(f'sents lens: {sents_lens}')
         if task == 'FN':
-            #print(f'{batch.shape}')
             for i in range(batch.shape[0]):
                 article_len = doc_lens[i]
                 sent_lens = torch.LongTensor(sents_lens[i])
@@ -107,11 +106,12 @@ class SentAttentionRNN(nn.Module):
                 sent_embeds.append(attended_pad)
             
         elif task == 'NLI':
-            article_len = doc_lens[i]
+            batch_sent = batch.squeeze(1)
+            article_len = doc_lens[batch_sent]
             sent_lens = torch.LongTensor(sents_lens[i])
 
             # remove pad sentences
-            article = batch[i][:article_len]                
+            article = batch[batch_sent][:article_len]                
 
             # sort
             sent_lens_sorted, sort_idxs = torch.sort(sent_lens, dim=0, descending=True)
@@ -145,7 +145,9 @@ class SentAttentionRNN(nn.Module):
             # pad to stack
             attended_pad = F.pad(attended_sum, (0, 0, 0, max_doc_len - attended_sum.shape[0]))
     
-            sent_embeds.append(attended_pad)
+            for embed in attended_pad:
+            	sent_embeds.append(embed)
+
         
         return torch.stack(sent_embeds)
     
