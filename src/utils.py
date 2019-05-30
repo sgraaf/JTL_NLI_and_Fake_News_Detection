@@ -80,6 +80,19 @@ def get_number_sentences(data_dir):
     num_sentences_fnn = sum(num_sentences_fnn)
     return num_sentences_fnn
 
+def get_class_balance(data_dir):
+    with open(data_dir, 'rb') as f:
+        x = pkl.load(f)
+    real = 0
+    fake = 0
+    for i in x['labels']: 
+        if i == 0:
+            real += 1
+        elif i == 1:
+            fake += 1
+    real_ratio = real / (real + fake)
+    fake_ratio = fake / (real + fake)
+    return real_ratio, fake_ratio
 
 def matrix_matmul(seq, weight, bias=None):
     features = []

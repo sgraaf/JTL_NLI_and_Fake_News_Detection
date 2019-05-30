@@ -36,7 +36,8 @@ from dataset import FNNDataset, PadSortBatch, SNLIDataset, PadSortBatchSNLI
 from models import HierarchicalAttentionNet
 from utils import (create_directories, load_latest_checkpoint, plot_results,
                    print_dataset_sizes, print_flags, print_model_parameters,
-                   save_model, save_results, create_checkpoint, get_number_sentences)
+                   save_model, save_results, create_checkpoint, get_number_sentences,
+                   get_class_balance)
 
 # defaults
 FLAGS = None
@@ -49,8 +50,8 @@ else:
 ROOT_DIR = Path.cwd().parent
 LEARNING_RATE = 0.05
 MAX_EPOCHS = 10
-BATCH_SIZE_FN = 10
-BATCH_SIZE_NLI = 100
+BATCH_SIZE_FN = 32
+BATCH_SIZE_NLI = 1024
 NUM_CLASSES_FN = 2
 
 WORD_EMBED_DIM = 300
@@ -65,6 +66,7 @@ CHECKPOINTS_DIR_DEFAULT = ROOT_DIR / 'output' / 'checkpoints'
 MODELS_DIR_DEFAULT = ROOT_DIR / 'output' / 'models'
 RESULTS_DIR_DEFAULT = ROOT_DIR / 'output' / 'results'
 DATA_PERCENTAGE_DEFAULT = 1.00
+RUN_DESC_DEFAULT = None
 
 ELMO_DIR = Path().cwd().parent / 'data' / 'elmo'
 ELMO_OPTIONS_FILE = ELMO_DIR / 'elmo_2x4096_512_2048cnn_2xhighway_5.5B_options.json'
@@ -101,8 +103,9 @@ def train_epoch_fn(train_iter, model, optimizer, loss_func_fn):
     train_acc = []
     for step, batch in enumerate(train_iter):
         articles, article_dims, labels = batch
-        if step % 10 == 0:
-            print(f'Processed {step} FN batches')
+        if step % 50 == 0 and step != 0:
+            print(f'Processed {step} FN batches.')
+            print(f'Accuracy: {train_acc[len(train_acc)-1]}.')
         optimizer.zero_grad()
         out = model(batch=articles, batch_dims=article_dims, task='FN')
         loss = loss_func_fn(out, labels)
@@ -141,19 +144,18 @@ def eval_epoch_nli(val_iter, model, loss_func_nli):
     
 def train():
     model_type = FLAGS.model_type
+    run_desc = FLAGS.run_desc
     data_dir = Path(FLAGS.data_dir)
-    checkpoints_dir = Path(FLAGS.checkpoints_dir)
-    models_dir = Path(FLAGS.models_dir)
-    results_dir = Path(FLAGS.results_dir)
+    checkpoints_dir = Path(FLAGS.checkpoints_dir) / model_type / run_desc
+    models_dir = Path(FLAGS.models_dir) / model_type / run_desc
+    results_dir = Path(FLAGS.results_dir) / model_type / run_desc
     #data_percentage = FLAGS.data_percentage
 
 
     if model_type == 'STL':
         only_fn = True
-        checkpoints_dir = checkpoints_dir / 'stl'
     else:
         only_fn = False
-        checkpoints_dir = checkpoints_dir / 'mtl'
     
     # check if data directory exists
     if not data_dir.exists():
@@ -235,7 +237,13 @@ def train():
     print()
 
     # set the criterion and optimizer
-    loss_func_fn = nn.CrossEntropyLoss()
+    # we weigh the loss: class [0] is real, class [1] is fake
+    # 
+    real_ratio, fake_ratio = get_class_balance(data_dir / 'FNN_train.pkl')
+    weights = [(1.0 - real_ratio), (1.0- fake_ratio)]
+    print(weights)
+    class_weights = torch.FloatTensor(weights).to(DEVICE)
+    loss_func_fn = nn.CrossEntropyLoss(weight=class_weights)
     if not only_fn:
         loss_func_nli = nn.CrossEntropyLoss()
         temperature = 2
@@ -266,18 +274,27 @@ def train():
             train_loss_fn = []
             train_acc_fn = []
             loss_fn_weight_gradnorm = 1            
-            loss_fn_weight_dataset = 1 - fnn_train_sent_no / (fnn_train_sent_no + snli_train_sent_no)            
+            
             train_loss_nli = []
             train_acc_nli = []
             loss_nli_weight_gradnorm = 1            
-            loss_nli_weight_dataset = 1 - snli_train_sent_no / (fnn_train_sent_no + snli_train_sent_no)            
+            
+            #define by sentence number
+            #loss_fn_weight_dataset = 1 - fnn_train_sent_no / (fnn_train_sent_no + snli_train_sent_no)            
+            #loss_nli_weight_dataset = 1 - snli_train_sent_no / (fnn_train_sent_no + snli_train_sent_no)            
+            loss_fn_weight_dataset = 1 - fnn_train_len / (fnn_train_len + snli_train_len)
+            loss_nli_weight_dataset = 1 - snli_train_len / (fnn_train_len + snli_train_len)
 
-            chance_fn = 100 * fnn_train_len / (fnn_train_len + snli_train_len)
+            chance_fn = 1000 * fnn_train_len / (fnn_train_len + snli_train_len)
             iterator_fnn = enumerate(FNN_DL['train'])
             iterator_snli = enumerate(SNLI_DL['train'])
             done_fnn, done_snli = False, False
             step_fnn = 0
             step_snli = 0
+
+            print(f'Training set to batch size ratio for Fake News Detection is {fnn_train_len / BATCH_SIZE_FN}.')
+            print(f'Training set to batch size ratio for Language Inference is {snli_train_len / BATCH_SIZE_NLI}.')
+
             while not (done_fnn and done_snli):
                 if len(train_loss_fn) > 1 and len(train_loss_nli) > 1:
                     # computes loss weights based on the loss from the previous iterations
@@ -292,7 +309,12 @@ def train():
                 else:
                     loss_fn_weight = loss_fn_weight_dataset
                     loss_nli_weight = loss_nli_weight_dataset
-                if np.random.randint(0,100) < chance_fn:
+
+                # define the total loss function
+                #loss_func = loss_func_fn + loss_func_nli
+                # is this needed?
+
+                if np.random.randint(0,1000) < chance_fn:
                     try:
                         step_fnn, batch_fnn = next(iterator_fnn)
                     except StopIteration:
@@ -312,20 +334,25 @@ def train():
                         train_acc_nli.append(batch_acc_nli)
                 if step_fnn % 10 == 0 and step_fnn != 0:
                     print(f'Processed {step_fnn} FNN batches.')
-                    print(f'Weight for loss for NLI is {loss_nli_weight}, loss for FN is {loss_fn_weight}.')
+                    print(f'Accuracy: {train_acc_fn[len(train_acc_fn)-1]}.')
+                    print(f'Weight for loss for NLI is {loss_nli_weight}, for loss for FN is {loss_fn_weight}.')
                 if step_snli % 50 == 0 and step_fnn != 0:
                     print(f'Processed {step_snli} SNLIbatches.')
-                    print(f'Weight for loss for NLI is {loss_nli_weight}, loss for FN is {loss_fn_weight}.')
+                    print(f'Accuracy: {train_acc_nli[len(train_acc_nli)-1]}.')
+                    print(f'Weight for loss for NLI is {loss_nli_weight}, for loss for FN is {loss_fn_weight}.')
         
         # one epoch of eval
         model.eval()
         val_loss_fn, val_acc_fn = eval_epoch_fn(FNN_DL['val'], model, 
                                               loss_func_fn)
+        tasks = ['fn']
         if model_type == 'MTL':
             val_loss_nli, val_acc_nli = eval_epoch_nli(SNLI_DL['val'], model, 
                                               loss_func_nli)
-            
-        for task in ['fn','nli']:
+            tasks.append('nli')
+        
+
+        for task in ['fn']:
             results[task]['epoch'].append(i)
             if task == 'fn':
                 temp_train_loss = train_loss_fn / len(FNN['train'])
@@ -387,6 +414,8 @@ if __name__ == '__main__':
                         help='Path of directory to store results')
     parser.add_argument('--data_percentage', type=float, default=DATA_PERCENTAGE_DEFAULT,
                         help='Percentage of data to be used (for training, testing, etc.)')
+    parser.add_argument('--run_desc', type=str, default=RUN_DESC_DEFAULT,
+                        help='Run description, used to generate the subdirectory title')
     FLAGS, unparsed = parser.parse_known_args()
 
     main()
