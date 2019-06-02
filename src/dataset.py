@@ -4,7 +4,7 @@
 import json
 import pickle as pkl
 
-from allennlp.modules.elmo import batch_to_ids
+# from allennlp.modules.elmo import batch_to_ids
 import torch
 import torch.nn.functional as F
 import torch.utils.data as data
@@ -16,10 +16,10 @@ else:
     
 class FNNDataset(data.Dataset):
 
-    def __init__(self, file_path, GloVe_vectors, ELMo):
+    def __init__(self, file_path, GloVe_vectors, ELMo=None):
         super(FNNDataset, self).__init__()
         self.GloVe = GloVe_vectors
-        self.ELMo = ELMo
+        # self.ELMo = ELMo
         self.articles, self.labels = self.load_data(file_path)
 
     def __getitem__(self, idx):
@@ -35,12 +35,13 @@ class FNNDataset(data.Dataset):
         # print(GloVe_embeddings.shape)
         
         # get the ELMo embeddings
-        ELMo_character_ids = batch_to_ids(article).to(DEVICE)
-        ELMo_embed = self.ELMo(ELMo_character_ids)['elmo_representations'][0]
+        # ELMo_character_ids = batch_to_ids(article).to(DEVICE)
+        # ELMo_embed = self.ELMo(ELMo_character_ids)['elmo_representations'][0]
         # print(ELMo_embeddings.shape)
         
         # concat the GloVe and ELMo embeddings
-        article_embed = torch.cat([GloVe_embed, ELMo_embed], dim=2)
+        # article_embed = torch.cat([GloVe_embed, ELMo_embed], dim=2)
+        article_embed = GloVe_embed
         
         return article_embed, sent_lens, label
     
@@ -59,10 +60,10 @@ class FNNDataset(data.Dataset):
 
 class SNLIDataset(data.Dataset):
 
-    def __init__(self, file_path, GloVe_vectors, ELMo):
+    def __init__(self, file_path, GloVe_vectors, ELMo=None):
         super(SNLIDataset, self).__init__()
         self.GloVe = GloVe_vectors
-        self.ELMo = ELMo
+        # self.ELMo = ELMo
         self.premises, self.hypotheses, self.labels = self.load_data(file_path)
 
     def __getitem__(self, idx):
@@ -75,14 +76,16 @@ class SNLIDataset(data.Dataset):
         hypothesis_GloVe_embed = torch.stack([self.GloVe[word] if word in self.GloVe.stoi else self.GloVe[word.lower()] for word in hypothesis])
         
         # get the ELMo embeddings
-        premise_ELMo_character_ids = batch_to_ids(premise).to(DEVICE)
-        premise_ELMo_embed = self.ELMo(premise_ELMo_character_ids)['elmo_representations'][0]
-        hypothesis_ELMo_character_ids = batch_to_ids(hypothesis)
-        hypothesis_ELMo_embed = self.ELMo(hypothesis_ELMo_character_ids)['elmo_representations'][0]
+        # premise_ELMo_character_ids = batch_to_ids(premise).to(DEVICE)
+        # premise_ELMo_embed = self.ELMo(premise_ELMo_character_ids)['elmo_representations'][0]
+        # hypothesis_ELMo_character_ids = batch_to_ids(hypothesis)
+        # hypothesis_ELMo_embed = self.ELMo(hypothesis_ELMo_character_ids)['elmo_representations'][0]
         
         # concat the GloVe and ELMo embeddings
-        premise_embed = torch.cat([premise_GloVe_embed, premise_ELMo_embed], dim=2)
-        hypothesis_embed = torch.cat([hypothesis_GloVe_embed, hypothesis_ELMo_embed], dim=2)
+        # premise_embed = torch.cat([premise_GloVe_embed, premise_ELMo_embed], dim=2)
+        # hypothesis_embed = torch.cat([hypothesis_GloVe_embed, hypothesis_ELMo_embed], dim=2)
+        premise_embed = premise_GloVe_embed
+        hypothesis_embed = hypothesis_GloVe_embed
         
         return premise_embed, len(premise), hypothesis_embed, len(hypothesis), label
     

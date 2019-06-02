@@ -27,7 +27,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torchtext.data import BucketIterator  # , Iterator
-from allennlp.modules.elmo import Elmo
+# from allennlp.modules.elmo import Elmo
 import torch.utils.data as data
 from torchtext.vocab import GloVe
 
@@ -55,7 +55,8 @@ BATCH_SIZE_NLI = 1024
 NUM_CLASSES_FN = 2
 
 WORD_EMBED_DIM = 300
-ELMO_EMBED_DIM = 1024
+# ELMO_EMBED_DIM = 1024
+ELMO_EMBED_DIM = None
 WORD_HIDDEN_DIM = 100
 SENT_HIDDEN_DIM = 100
 
@@ -68,9 +69,9 @@ RESULTS_DIR_DEFAULT = ROOT_DIR / 'output' / 'results'
 DATA_PERCENTAGE_DEFAULT = 1.00
 RUN_DESC_DEFAULT = None
 
-ELMO_DIR = Path().cwd().parent / 'data' / 'elmo'
-ELMO_OPTIONS_FILE = ELMO_DIR / 'elmo_2x4096_512_2048cnn_2xhighway_5.5B_options.json'
-ELMO_WEIGHT_FILE = ELMO_DIR / 'elmo_2x4096_512_2048cnn_2xhighway_5.5B_weights.hdf5'
+# ELMO_DIR = Path().cwd().parent / 'data' / 'elmo'
+# ELMO_OPTIONS_FILE = ELMO_DIR / 'elmo_2x4096_512_2048cnn_2xhighway_5.5B_options.json'
+# ELMO_WEIGHT_FILE = ELMO_DIR / 'elmo_2x4096_512_2048cnn_2xhighway_5.5B_weights.hdf5'
 
 
 def train_batch_fn(batch, model, optimizer, loss_func_fn, loss_fn_weight):
@@ -170,20 +171,19 @@ def train():
     # get the glove and elmo embeddings
     GloVe_vectors = GloVe()
     print('Uploaded GloVe embeddings.')
-    ELMo = Elmo(
-            options_file=ELMO_OPTIONS_FILE, 
-            weight_file=ELMO_WEIGHT_FILE,
-            num_output_representations=1, 
-            requires_grad=False,
-            dropout=0).to(DEVICE)
-    print('Uploaded Elmo embeddings.')
+    # ELMo = Elmo(
+    #         options_file=ELMO_OPTIONS_FILE, 
+    #         weight_file=ELMO_WEIGHT_FILE,
+    #         num_output_representations=1, 
+    #         requires_grad=False,
+    #         dropout=0).to(DEVICE)
+    # print('Uploaded Elmo embeddings.')
     # get the fnn and snli data
     FNN = {}
     FNN_DL = {}
 
     for path in ['train', 'val', 'test']:
-        FNN[path] = FNNDataset(data_dir / ('FNN_' + path + '.pkl'), 
-           GloVe_vectors, ELMo)
+        FNN[path] = FNNDataset(data_dir / ('FNN_' + path + '.pkl'), GloVe_vectors)
         FNN_DL[path] = data.DataLoader(
                 dataset=FNN[path],
                 batch_size=BATCH_SIZE_FN,
@@ -196,8 +196,7 @@ def train():
         SNLI = {}
         SNLI_DL = {}
         for path in ['train', 'val', 'test']:
-            SNLI[path] = SNLIDataset(data_dir / ('SNLI_' + path + '.pkl'), 
-               GloVe_vectors, ELMo)
+            SNLI[path] = SNLIDataset(data_dir / ('SNLI_' + path + '.pkl'), GloVe_vectors)
             SNLI_DL[path] = data.DataLoader(
                     dataset=SNLI[path],
                     batch_size=BATCH_SIZE_NLI,
@@ -223,7 +222,8 @@ def train():
     elif model_type == 'Transfer':
         print("Nothing for now.")
     if ELMO_EMBED_DIM is not None:
-        input_dim = WORD_EMBED_DIM + ELMO_EMBED_DIM 
+        # input_dim = WORD_EMBED_DIM + ELMO_EMBED_DIM 
+        input_dim = WORD_EMBED_DIM
     else:
         input_dim = WORD_EMBED_DIM
     model = HierarchicalAttentionNet(input_dim=input_dim , 
