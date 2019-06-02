@@ -207,9 +207,11 @@ def train():
                     collate_fn=PadSortBatchSNLI())
         print('Uploaded SNLI data.')
         snli_train_sent_no = len(SNLI['train']) * 2
-        snli_train_len = len(SNLI_DL['train'])
+        snli_train_len = len(SNLI['train'])
     fnn_train_sent_no = get_number_sentences(data_dir / 'FNN_train.pkl')
-    fnn_train_len = len(FNN_DL['train'])
+    fnn_train_len = len(FNN['train'])
+
+
     # initialize the model, according to the model type
     print('Initializing the model...', end=' ')
     if model_type == 'MTL':
@@ -285,13 +287,13 @@ def train():
             loss_fn_weight_dataset = 1 - fnn_train_len / (fnn_train_len + snli_train_len)
             loss_nli_weight_dataset = 1 - snli_train_len / (fnn_train_len + snli_train_len)
 
-            chance_fn = 1000 * fnn_train_len / (fnn_train_len + snli_train_len)
+            chance_fn = 1000 * (fnn_train_len / BATCH_SIZE_FN) / ((fnn_train_len / BATCH_SIZE_FN) + (snli_train_len / BATCH_SIZE_NLI))
             iterator_fnn = enumerate(FNN_DL['train'])
             iterator_snli = enumerate(SNLI_DL['train'])
             done_fnn, done_snli = False, False
             step_fnn = 0
             step_snli = 0
-
+            print(f'Train set length, FNN: {fnn_train_len}. Train set length, SNLI: {snli_train_len}.')
             print(f'Training set to batch size ratio for Fake News Detection is {fnn_train_len / BATCH_SIZE_FN}.')
             print(f'Training set to batch size ratio for Language Inference is {snli_train_len / BATCH_SIZE_NLI}.')
 
@@ -320,27 +322,34 @@ def train():
                     except StopIteration:
                         done_fnn = True
                     else:
-                        batch_loss_fn, batch_acc_fn = train_batch_fn(batch_fnn, model, optimizer, loss_func_fn, loss_fn_weight)
-                        train_loss_fn.append(batch_loss_fn)
-                        train_acc_fn.append(batch_acc_fn)
+                        try:
+                            batch_loss_fn, batch_acc_fn = train_batch_fn(batch_fnn, model, optimizer, loss_func_fn, loss_fn_weight)
+                            train_loss_fn.append(batch_loss_fn)
+                            train_acc_fn.append(batch_acc_fn)
+                        except:
+                            print('Error in batch')
                 else:
                     try:
                         step_snli, batch_snli = next(iterator_snli)
                     except StopIteration:
                         done_snli = True
                     else:
-                        batch_loss_nli, batch_acc_nli = train_batch_nli(batch_snli, model, optimizer, loss_func_nli, loss_nli_weight)
-                        train_loss_nli.append(batch_loss_nli)
-                        train_acc_nli.append(batch_acc_nli)
-                if step_fnn % 10 == 0 and step_fnn != 0:
+                        try:
+                            batch_loss_nli, batch_acc_nli = train_batch_nli(batch_snli, model, optimizer, loss_func_nli, loss_nli_weight)
+                            train_loss_nli.append(batch_loss_nli)
+                            train_acc_nli.append(batch_acc_nli)
+                        except:
+                            print('Error in batch')
+                print(f'FNN batch {step_fnn}')
+                print(f'SNLI batch {step_snli}')
+                if step_fnn % 50 == 0 and step_fnn != 0:
                     print(f'Processed {step_fnn} FNN batches.')
                     print(f'Accuracy: {train_acc_fn[len(train_acc_fn)-1]}.')
                     print(f'Weight for loss for NLI is {loss_nli_weight}, for loss for FN is {loss_fn_weight}.')
-                if step_snli % 50 == 0 and step_fnn != 0:
+                if step_snli % 50 == 0 and step_snli != 0:
                     print(f'Processed {step_snli} SNLIbatches.')
                     print(f'Accuracy: {train_acc_nli[len(train_acc_nli)-1]}.')
                     print(f'Weight for loss for NLI is {loss_nli_weight}, for loss for FN is {loss_fn_weight}.')
-        
         # one epoch of eval
         model.eval()
         val_loss_fn, val_acc_fn = eval_epoch_fn(FNN_DL['val'], model, 
@@ -352,23 +361,23 @@ def train():
             tasks.append('nli')
         
 
-        for task in ['fn']:
+        for task in tasks:
             results[task]['epoch'].append(i)
             if task == 'fn':
-                temp_train_loss = train_loss_fn / len(FNN['train'])
-                temp_val_loss = val_loss_fn / len(FNN['val'])
+                temp_train_loss = train_loss_fn
+                temp_val_loss = val_loss_fn 
                 temp_train_acc = train_acc_fn
                 temp_val_acc = val_acc_fn
             elif task == 'nli':
-                temp_train_loss = train_loss_nli / len(SNLI['train'])
-                temp_val_loss = val_loss_nli / len(SNLI['val'])
+                temp_train_loss = train_loss_nli 
+                temp_val_loss = val_loss_nli
                 temp_train_acc = train_acc_nli
                 temp_val_acc = val_acc_nli
                 
             results[task]['train_loss'].append(temp_train_loss)        
-            results[task]['train_accuracy'].append(torch.tensor(temp_train_acc).mean().item())
+            results[task]['train_accuracy'].append(temp_train_acc)
             results[task]['val_loss'].append(temp_val_loss)
-            results[task]['val_accuracy'].append(torch.tensor(temp_val_acc).mean().item())
+            results[task]['val_accuracy'].append(temp_val_acc)
             print(results)
         
         best_accuracy = torch.tensor(temp_val_acc).max().item()
